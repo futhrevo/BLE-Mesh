@@ -9,10 +9,7 @@ import android.bluetooth.le.ScanResult;
 import android.bluetooth.le.ScanSettings;
 import android.content.Context;
 import android.os.Handler;
-import android.os.ParcelUuid;
 import android.util.Log;
-
-import com.silabs.bluetooth_mesh.BluetoothMesh;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -44,7 +41,7 @@ public class BleScanner {
         }
     }
 
-    public void startScanning(final ScannerInterface scannerInterface, long duration) {
+    public void startScanning(final ScannerInterface scannerInterface, long duration, List<ScanFilter> filters) {
         if(scanning) {
             Log.d(TAG, "Already in scanning mode");
             return;
@@ -68,11 +65,10 @@ public class BleScanner {
 
         this.scannerInterface = scannerInterface;
         Log.d(TAG, "Scanning");
-        List<ScanFilter> filters = new ArrayList<>();
-        ParcelUuid meshServ = ParcelUuid.fromString(BluetoothMesh.meshUnprovisionedService.toString());
-        ScanFilter filter = new ScanFilter.Builder().setServiceUuid(meshServ).build();
-        // TODO: Enable this line when testing with mesh devices
-//        filters.add(filter);
+        if(filters == null) {
+            filters = new ArrayList<>();
+        }
+
         ScanSettings settings = new ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build();
         setScanning(true);
         scanner.startScan(filters, settings, scan_callback);
@@ -90,7 +86,8 @@ public class BleScanner {
             if(!scanning){
                 return;
             }
-            scannerInterface.candidateBleDevice(result.getDevice(), result.getScanRecord().getBytes(), result.getRssi());
+//            scannerInterface.candidateBleDevice(result.getDevice(), result.getScanRecord().getBytes(), result.getRssi());
+            scannerInterface.scanResult(result);
         }
     };
 

@@ -3,9 +3,11 @@ package in.hedera.reku.swimclock.scanner;
 
 import android.arch.lifecycle.Observer;
 import android.arch.lifecycle.ViewModelProviders;
-import android.bluetooth.BluetoothDevice;
+import android.bluetooth.le.ScanFilter;
+import android.bluetooth.le.ScanResult;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.ParcelUuid;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
 import android.support.v7.widget.LinearLayoutManager;
@@ -20,9 +22,12 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Toast;
 
+import com.silabs.bluetooth_mesh.BluetoothMesh;
+
+import java.util.ArrayList;
 import java.util.List;
 
-import in.hedera.reku.swimclock.Constants;
+import in.hedera.reku.swimclock.utils.Constants;
 import in.hedera.reku.swimclock.R;
 import in.hedera.reku.swimclock.store.NPDevice.NPDevice;
 
@@ -122,8 +127,8 @@ public class ScannerFragment extends Fragment implements ScannerInterface {
     }
 
     @Override
-    public void candidateBleDevice(final BluetoothDevice device, byte[] scan_record, final int rssi) {
-        NPDevice npDevice = new NPDevice(device, rssi);
+    public void scanResult(ScanResult result) {
+        NPDevice npDevice = new NPDevice(result.getDevice(), result.getRssi());
         npdViewModel.insert(npDevice);
     }
 
@@ -150,7 +155,12 @@ public class ScannerFragment extends Fragment implements ScannerInterface {
         if(!bleScanner.isScanning()){
             npdViewModel.deleteAll();
             simpleToast(Constants.SCANNING, 2000);
-            bleScanner.startScanning(this, Constants.SCAN_TIMEOUT);
+            List<ScanFilter> filters = new ArrayList<>();
+            ParcelUuid meshServ = ParcelUuid.fromString(BluetoothMesh.meshUnprovisionedService.toString());
+            ScanFilter filter = new ScanFilter.Builder().setServiceUuid(meshServ).build();
+            // TODO: Enable this line when testing with mesh devices
+//          filters.add(filter);
+            bleScanner.startScanning(this, Constants.SCAN_TIMEOUT, filters);
         } else {
             bleScanner.stopScanning();
         }

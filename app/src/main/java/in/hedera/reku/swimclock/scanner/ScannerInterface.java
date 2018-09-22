@@ -1,10 +1,10 @@
 package in.hedera.reku.swimclock.scanner;
 
-import android.bluetooth.BluetoothDevice;
+import android.bluetooth.le.ScanResult;
 
 public interface ScannerInterface {
 
-    void candidateBleDevice(BluetoothDevice device, byte[] scan_record, int rssi);
     void scanningStarted();
     void scanningStopped();
+    void scanResult(ScanResult result);
 }

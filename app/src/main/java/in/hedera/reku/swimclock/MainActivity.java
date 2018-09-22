@@ -5,12 +5,18 @@ import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCallback;
+import android.bluetooth.BluetoothGattCharacteristic;
+import android.bluetooth.BluetoothGattDescriptor;
+import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothManager;
+import android.bluetooth.le.ScanFilter;
+import android.bluetooth.le.ScanResult;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.os.ParcelUuid;
 import android.support.annotation.NonNull;
 import android.support.design.widget.BottomNavigationView;
 import android.support.v4.app.ActivityCompat;
@@ -23,11 +29,17 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.silabs.bluetooth_mesh.BluetoothMesh;
+import com.silabs.bluetooth_mesh.DeviceInfo;
 import com.silabs.bluetooth_mesh.MeshCallback;
 import com.silabs.bluetooth_mesh.NetworkInfo;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import in.hedera.reku.swimclock.home.HomeFragment;
+import in.hedera.reku.swimclock.scanner.BleScanner;
 import in.hedera.reku.swimclock.scanner.ScannerFragment;
+import in.hedera.reku.swimclock.scanner.ScannerInterface;
 import in.hedera.reku.swimclock.settings.SettingsFragment;
 
 public class MainActivity extends AppCompatActivity {
@@ -85,7 +97,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         // Create bluetooth mesh
-        BluetoothMesh btmesh = new BluetoothMesh(getApplicationContext(), btmeshCallback);
+        btmesh = new BluetoothMesh(getApplicationContext(), btmeshCallback);
 
     }
 
@@ -202,11 +214,20 @@ public class MainActivity extends AppCompatActivity {
         alertDialog.show();
     }
 
-    MeshCallback btmeshCallback = new MeshCallback() {
+    private final  MeshCallback btmeshCallback = new MeshCallback() {
+        @Override
+        public void didSuccessProvision(int meshAddress, byte[] deviceUuid, int status) {
+            super.didSuccessProvision(meshAddress, deviceUuid, status);
+            if(status == 0) { // provison success
+                addDeviceInfo(meshAddress, deviceUuid);
+            }
+        }
+
         @Override
         public void disconnectionRequest(int gattHandle) {
             super.disconnectionRequest(gattHandle);
-
+            gatt.disconnect();
+            btmesh.disconnectGatt(gattHandle);
         }
 
         @Override
@@ -235,6 +256,15 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
+    private void addDeviceInfo(int meshAddress, byte[] deviceUuid) {
+        DeviceInfo clock = new DeviceInfo("name", deviceUuid);
+        NetworkInfo netinfo = btmesh.getNetworkDB().get(0);
+        clock.addToNetwork(netinfo, meshAddress);
+        netinfo.addDevice(clock);
+        btmesh.saveNetworkDB(netinfo);
+
+    }
+
     public void provisonDevice(String mac) {
         synchronized (mConnectionLock) {
             BluetoothManager bluetoothManager = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
@@ -251,22 +281,70 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
 
-            final BluetoothGattCallback gattCallback = new BluetoothGattCallback() {
-                @Override
-                public void onMtuChanged(BluetoothGatt gatt, int mtu, int status) {
-                    super.onMtuChanged(gatt, mtu, status);
-
-                }
-
-                @Override
-                public void onServicesDiscovered(BluetoothGatt gatt, int status) {
-                    super.onServicesDiscovered(gatt, status);
-                }
-            };
-
             BluetoothGatt gatt = device.connectGatt(this, false, gattCallback);
             gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH);
             gatt.requestMtu(69);
+        }
+    }
+
+    public class ConnectProxy implements ScannerInterface {
+        public final String TAG = ScannerFragment.class.getSimpleName();
+        private static final long SCAN_TIMEOUT = 60000;
+
+        private BleScanner bleScanner;
+
+        public ConnectProxy(Context context) {
+            bleScanner = new BleScanner(context);
+            List<ScanFilter> filters = new ArrayList<>();
+            ParcelUuid meshProxyServ = ParcelUuid.fromString(BluetoothMesh.meshProxyService.toString());
+            ScanFilter filter = new ScanFilter.Builder().setServiceUuid(meshProxyServ).build();
+            // TODO: Enable this line when testing with mesh devices
+//          filters.add(filter);
+            bleScanner.startScanning(this, SCAN_TIMEOUT, filters);
+        }
+
+        @Override
+        public void scanningStarted() {
+
+        }
+
+        @Override
+        public void scanningStopped() {
+
+        }
+
+        @Override
+        public void scanResult(ScanResult result) {
+            // First go through devices which don't have DCD entries yet, they might be
+            // advertising with Identity instead of Network beacons, for example right
+            // after provisioning
+
+            boolean idMatch = false;
+            boolean netMatch = false;
+            ParcelUuid meshProxyServ = ParcelUuid.fromString(BluetoothMesh.meshProxyService.toString());
+            NetworkInfo netInfo = btmesh.getNetworkDB().get(0);
+            if(result.getScanRecord() != null && result.getScanRecord().getServiceUuids() != null && result.getScanRecord().getServiceUuids().contains(meshProxyServ)) {
+                for (DeviceInfo devInfo : netInfo.devicesInfo()) {
+                    if(devInfo.dcd() == null) {
+                        if (btmesh.deviceIdentityMatches(result.getScanRecord().getBytes(), devInfo) >= 0) {
+//                            identityMatchResults.add(result);
+                            idMatch = true;
+                            break;
+                        }
+                    }
+                }
+                // If we already have an Identity match, it won't match the Network beacon
+                if(!idMatch && btmesh.networkHashMatches(netInfo, result.getScanRecord().getBytes()) >= 0) {
+//                    networkMatchResults.add(result);
+                    netMatch = true;
+                }
+
+                if (!idMatch && !netMatch) return;
+                BluetoothDevice device = result.getDevice();
+                bleScanner.stopScanning();
+                BluetoothGatt gatt = device.connectGatt(getApplicationContext(), false, gattCallback);
+                gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_BALANCED); //No Callback
+            }
         }
     }
 }
