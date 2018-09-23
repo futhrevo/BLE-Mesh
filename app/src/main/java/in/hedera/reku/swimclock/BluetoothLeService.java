@@ -14,6 +14,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Binder;
 import android.os.IBinder;
+import android.os.ParcelUuid;
 import android.support.annotation.Nullable;
 import android.util.Log;
 
@@ -22,6 +23,7 @@ import com.silabs.bluetooth_mesh.BluetoothMesh;
 import java.util.List;
 
 import in.hedera.reku.swimclock.utils.BleQueue;
+import in.hedera.reku.swimclock.utils.Constants;
 
 import static in.hedera.reku.swimclock.utils.Constants.STATE_CONNECTED;
 import static in.hedera.reku.swimclock.utils.Constants.STATE_CONNECTING;
@@ -40,6 +42,7 @@ public class BluetoothLeService extends Service {
     private BluetoothGatt mBluetoothGatt;
     private int mConnectionState = STATE_DISCONNECTED;
     private BleQueue bleQueue;
+    private int priority = BluetoothGatt.CONNECTION_PRIORITY_BALANCED;
 
 
     // Implements callback methods for GATT events that the app cares about. For
@@ -47,51 +50,75 @@ public class BluetoothLeService extends Service {
     private final BluetoothGattCallback mGattCallback = new BluetoothGattCallback() {
         @Override
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
+            String intentAction;
             if(status == BluetoothGatt.GATT_SUCCESS) {
                 if (newState == BluetoothProfile.STATE_CONNECTED) {
+                    intentAction = Constants.ACTION_GATT_CONNECTED;
                     mConnectionState = STATE_CONNECTED;
+                    broadcastUpdate(intentAction);
                     Log.i(TAG, "Connected to GATT server.");
-                    if (gatt.discoverServices()) {
-                        // successfully started discovering
-                    } else {
-                        // already disconnected
-                    }
+                    Log.i(TAG, "Attempting to start service discovery:" + gatt.discoverServices());
                 } else if(newState == BluetoothProfile.STATE_DISCONNECTED) {
+                    intentAction = Constants.ACTION_GATT_DISCONNECTED;
                     mConnectionState = STATE_DISCONNECTED;
+                    broadcastUpdate(intentAction);
                     Log.i(TAG, "Disconnected from GATT server.");
+
+                    // Necessary to disconnect and close because of Android bug:
+                    // https://code.google.com/p/android/issues/detail?id=58381#c17
+                    // http://stackoverflow.com/a/18889509/2616544
                     disconnect();
                 }
             } else {
+                intentAction = Constants.ACTION_GATT_SERVICES_ERROR;
                 mConnectionState = STATE_DISCONNECTED;
                 Log.i(TAG, "Gatt server error, status: " + status + ", newState: " + newState);
+                broadcastUpdate(intentAction);
             }
         }
 
         @Override
         public void onServicesDiscovered(BluetoothGatt gatt, int status) {
-            super.onServicesDiscovered(gatt, status);
-            if (status != BluetoothGatt.GATT_SUCCESS) {
-                return;
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                broadcastUpdate(Constants.ACTION_GATT_SERVICES_DISCOVERED);
+                bleQueue.requestConnectionPriority(priority);
+                bleQueue.requestMtu(69);
+            } else {
+                Log.w(TAG, "onServicesDiscovered received: " + status);
             }
-            bleQueue.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH);
-            bleQueue.requestMtu(69);
         }
 
         @Override
         public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
             super.onCharacteristicRead(gatt, characteristic, status);
             bleQueue.onCharacteristicRead(gatt, characteristic, status);
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                broadcastUpdate(Constants.ACTION_DATA_AVAILABLE, characteristic);
+            }
         }
 
         @Override
         public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
             super.onCharacteristicWrite(gatt, characteristic, status);
             bleQueue.onCharacteristicWrite(gatt, characteristic, status);
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                Log.d(TAG, "Characteristic writing successful");
+            } else if (status == BluetoothGatt.GATT_INSUFFICIENT_AUTHENTICATION) {
+                // this is where the tricky part comes
+                if (gatt.getDevice().getBondState() == BluetoothDevice.BOND_NONE) {
+                    Log.e(TAG, "Bonding required!!!");
+                } else {
+                    Log.e(TAG, "The phone is trying to read from paired device without encryption. Android Bug?");
+                }
+            } else {
+                Log.e(TAG, "Error writing characteristic, status: " + status);
+            }
         }
 
         @Override
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
             super.onCharacteristicChanged(gatt, characteristic);
+            broadcastUpdate(Constants.ACTION_DATA_AVAILABLE, characteristic);
         }
 
         @Override
@@ -103,6 +130,18 @@ public class BluetoothLeService extends Service {
         public void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
             super.onDescriptorWrite(gatt, descriptor, status);
             bleQueue.onDescriptorWrite(gatt, descriptor, status);
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                Log.d(TAG, "Discriptor writing successful");
+            } else if (status == BluetoothGatt.GATT_INSUFFICIENT_AUTHENTICATION) {
+                // this is where the tricky part comes
+                if (gatt.getDevice().getBondState() == BluetoothDevice.BOND_NONE) {
+                    Log.e(TAG, "Bonding required!!!");
+                } else {
+                    Log.e(TAG, "The phone is trying to read from paired device without encryption. Android Bug?");
+                }
+            } else {
+                Log.e(TAG, "Error writing descriptor, status: " + status);
+            }
         }
 
         @Override
@@ -111,13 +150,26 @@ public class BluetoothLeService extends Service {
             bleQueue.onMtuChanged(gatt, mtu, status);
             if(status == BluetoothGatt.GATT_SUCCESS) {
                 Log.d(TAG, "onMtuChanged");
-                gatt.discoverServices();
+                broadcastUpdate(Constants.ACTION_MTU_CHANGED);
             } else {
                 Log.d(TAG, "onMtuChanged status : " + status + ", mtu : " + mtu);
                 gatt.requestMtu(69);
             }
         }
     };
+    private void broadcastUpdate(final String action) {
+        final Intent intent = new Intent(action);
+        sendBroadcast(intent);
+    }
+
+    private void broadcastUpdate(final String action,
+                                 final BluetoothGattCharacteristic characteristic) {
+        final Intent intent = new Intent(action);
+        intent.putExtra(Constants.EXTRA_DATA, characteristic.getValue());
+        intent.putExtra(Constants.EXTRA_CHARACTERISTIC,
+                new ParcelUuid(characteristic.getUuid()));
+        sendBroadcast(intent);
+    }
 
     public class LocalBinder extends Binder {
         public BluetoothLeService getService() {
@@ -179,7 +231,7 @@ public class BluetoothLeService extends Service {
      * {@code BluetoothGattCallback#onConnectionStateChange(android.bluetooth.BluetoothGatt, int, int)}
      * callback.
      */
-    public boolean connect(final String address) {
+    public boolean connect(final String address, final int priority) {
         if (mBluetoothAdapter == null || address == null) {
             Log.w(TAG,"BluetoothAdapter not initialized or unspecified address.");
             return false;
@@ -190,6 +242,7 @@ public class BluetoothLeService extends Service {
             Log.w(TAG, "Device not found.  Unable to connect.");
             return false;
         }
+        this.priority = priority;
         // We want to directly connect to the device, so we are setting the
         // autoConnect parameter to false.
         mBluetoothGatt = device.connectGatt(this, false, mGattCallback);

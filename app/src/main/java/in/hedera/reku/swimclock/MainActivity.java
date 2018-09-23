@@ -4,18 +4,20 @@ import android.Manifest;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
-import android.bluetooth.BluetoothGattCallback;
-import android.bluetooth.BluetoothGattCharacteristic;
-import android.bluetooth.BluetoothGattDescriptor;
-import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.le.ScanFilter;
 import android.bluetooth.le.ScanResult;
+import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.ServiceConnection;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.os.IBinder;
 import android.os.ParcelUuid;
 import android.support.annotation.NonNull;
 import android.support.design.widget.BottomNavigationView;
@@ -41,6 +43,7 @@ import in.hedera.reku.swimclock.scanner.BleScanner;
 import in.hedera.reku.swimclock.scanner.ScannerFragment;
 import in.hedera.reku.swimclock.scanner.ScannerInterface;
 import in.hedera.reku.swimclock.settings.SettingsFragment;
+import in.hedera.reku.swimclock.utils.Constants;
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = MainActivity.class.getSimpleName();
@@ -50,7 +53,10 @@ public class MainActivity extends AppCompatActivity {
     public boolean isBTEnabled;
     private TextView mTextMessage;
     private BluetoothMesh btmesh;
-    private BluetoothGatt gatt;
+    private BluetoothLeService bleService;
+    private boolean isBound = false;
+    private String provisionMac;
+    private String proxyMac;
 
     private BottomNavigationView.OnNavigationItemSelectedListener mOnNavigationItemSelectedListener
             = new BottomNavigationView.OnNavigationItemSelectedListener() {
@@ -99,6 +105,10 @@ public class MainActivity extends AppCompatActivity {
         // Create bluetooth mesh
         btmesh = new BluetoothMesh(getApplicationContext(), btmeshCallback);
 
+        // start LE service
+        Intent intent = new Intent(this, BluetoothLeService.class);
+        bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE);
+        registerReceivers();
     }
 
     @Override
@@ -135,6 +145,13 @@ public class MainActivity extends AppCompatActivity {
                 Log.e(TAG, "Unexpected request code");
 
         }
+    }
+
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        unregisterReceivers();
     }
 
     private boolean loadFragment(Fragment fragment) {
@@ -214,11 +231,11 @@ public class MainActivity extends AppCompatActivity {
         alertDialog.show();
     }
 
-    private final  MeshCallback btmeshCallback = new MeshCallback() {
+    private final MeshCallback btmeshCallback = new MeshCallback() {
         @Override
         public void didSuccessProvision(int meshAddress, byte[] deviceUuid, int status) {
             super.didSuccessProvision(meshAddress, deviceUuid, status);
-            if(status == 0) { // provison success
+            if (status == 0) { // provison success
                 addDeviceInfo(meshAddress, deviceUuid);
             }
         }
@@ -226,7 +243,7 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void disconnectionRequest(int gattHandle) {
             super.disconnectionRequest(gattHandle);
-            gatt.disconnect();
+            bleService.disconnect();
             btmesh.disconnectGatt(gattHandle);
         }
 
@@ -267,23 +284,12 @@ public class MainActivity extends AppCompatActivity {
 
     public void provisonDevice(String mac) {
         synchronized (mConnectionLock) {
-            BluetoothManager bluetoothManager = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
-            BluetoothAdapter mBluetoothAdapter = bluetoothManager.getAdapter();
-
-            if (mBluetoothAdapter == null || mac == null) {
-                Log.e(TAG, "No Bluetooth Device or Bluetooth Adapter");
-                return;
+            provisionMac = mac;
+            if(!bleService.isConnected()) {
+                bleService.connect(mac, BluetoothGatt.CONNECTION_PRIORITY_HIGH);
+            } else {
+                bleService.disconnect();
             }
-
-            BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(mac);
-            if (device == null) {
-                Log.e(TAG, "Connect: device is null");
-                return;
-            }
-
-            BluetoothGatt gatt = device.connectGatt(this, false, gattCallback);
-            gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH);
-            gatt.requestMtu(69);
         }
     }
 
@@ -323,9 +329,9 @@ public class MainActivity extends AppCompatActivity {
             boolean netMatch = false;
             ParcelUuid meshProxyServ = ParcelUuid.fromString(BluetoothMesh.meshProxyService.toString());
             NetworkInfo netInfo = btmesh.getNetworkDB().get(0);
-            if(result.getScanRecord() != null && result.getScanRecord().getServiceUuids() != null && result.getScanRecord().getServiceUuids().contains(meshProxyServ)) {
+            if (result.getScanRecord() != null && result.getScanRecord().getServiceUuids() != null && result.getScanRecord().getServiceUuids().contains(meshProxyServ)) {
                 for (DeviceInfo devInfo : netInfo.devicesInfo()) {
-                    if(devInfo.dcd() == null) {
+                    if (devInfo.dcd() == null) {
                         if (btmesh.deviceIdentityMatches(result.getScanRecord().getBytes(), devInfo) >= 0) {
 //                            identityMatchResults.add(result);
                             idMatch = true;
@@ -334,17 +340,89 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
                 // If we already have an Identity match, it won't match the Network beacon
-                if(!idMatch && btmesh.networkHashMatches(netInfo, result.getScanRecord().getBytes()) >= 0) {
+                if (!idMatch && btmesh.networkHashMatches(netInfo, result.getScanRecord().getBytes()) >= 0) {
 //                    networkMatchResults.add(result);
                     netMatch = true;
                 }
 
                 if (!idMatch && !netMatch) return;
-                BluetoothDevice device = result.getDevice();
+                proxyMac = result.getDevice().getAddress();
                 bleScanner.stopScanning();
-                BluetoothGatt gatt = device.connectGatt(getApplicationContext(), false, gattCallback);
-                gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_BALANCED); //No Callback
+                synchronized (mConnectionLock) {
+                    if(!bleService.isConnected()) {
+                        bleService.connect(proxyMac, BluetoothGatt.CONNECTION_PRIORITY_BALANCED);
+                    } else {
+                        bleService.disconnect();
+                    }
+                }
             }
         }
     }
+
+    private ServiceConnection serviceConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            BluetoothLeService.LocalBinder binder = (BluetoothLeService.LocalBinder) service;
+            bleService = binder.getService();
+            isBound = true;
+            if (!bleService.initialize()) {
+                Log.e(TAG, "Unable to initialize Bluetooth");
+            }
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            isBound = false;
+            if (bleService != null) {
+                bleService.disconnect();
+                bleService.close();
+            }
+
+            bleService = null;
+        }
+    };
+
+    private static IntentFilter makeGattUpdateIntentFilter() {
+        final IntentFilter intentFilter = new IntentFilter();
+        intentFilter.addAction(Constants.ACTION_GATT_CONNECTED);
+        intentFilter.addAction(Constants.ACTION_GATT_DISCONNECTED);
+        intentFilter.addAction(Constants.ACTION_GATT_SERVICES_DISCOVERED);
+        intentFilter.addAction(Constants.ACTION_DATA_AVAILABLE);
+        intentFilter.addAction(Constants.ACTION_GATT_SERVICES_ERROR);
+        intentFilter.addAction(Constants.ACTION_MTU_CHANGED);
+        intentFilter.addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED);
+        return intentFilter;
+    }
+
+    private BroadcastReceiver gattUpdatesReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            final String action = intent.getAction();
+            if (Constants.ACTION_GATT_CONNECTED.equals(action)) {
+
+            } else if (Constants.ACTION_GATT_DISCONNECTED.equals(action)) {
+
+            } else if (Constants.ACTION_GATT_SERVICES_DISCOVERED.equals(action)) {
+
+            } else if (Constants.ACTION_DATA_AVAILABLE.equals(action)) {
+
+            } else if (Constants.ACTION_GATT_SERVICES_ERROR.equals(action)) {
+
+            } else if (Constants.ACTION_MTU_CHANGED.equals(action)) {
+
+            } else if (BluetoothDevice.ACTION_BOND_STATE_CHANGED.equals(action)) {
+
+            }
+        }
+    };
+
+    private void registerReceivers() {
+        registerReceiver(gattUpdatesReceiver, makeGattUpdateIntentFilter());
+    }
+
+
+    private void unregisterReceivers() {
+        unregisterReceiver(gattUpdatesReceiver);
+    }
+
 }
