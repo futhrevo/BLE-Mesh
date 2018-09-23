@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <PreferenceCategory android:title="Network" android:key="pref_key_network_settings">
+        <Preference android:key="pref_key_network_key" android:title="Network Key" />
+    </PreferenceCategory>
+    <PreferenceCategory android:title="Scan" android:key="pref_key_scan_settings">
+        <Preference android:key="pref_scan_timeout" android:title="Scan Timeout" />
+    </PreferenceCategory>
+</PreferenceScreen>

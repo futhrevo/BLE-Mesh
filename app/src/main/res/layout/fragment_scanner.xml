@@ -6,21 +6,33 @@
     android:orientation="vertical"
     tools:context=".scanner.ScannerFragment">
 
-    <TextView
+    <ProgressBar
+        style="@style/Widget.AppCompat.ProgressBar.Horizontal"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textSize="20sp"
-        android:text="Swim Clock Scanner"
-        android:padding="10dp"
-        android:textColor="@color/colorPrimaryDark"
-        />
+        android:indeterminate="true"
+        android:visibility="gone"
+        android:id="@+id/progress_bar_scan" />
 
     <android.support.v7.widget.RecyclerView
         android:id="@+id/deviceList"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
+        android:layout_height="match_parent"
+        android:layout_margin="10dp"
         android:paddingLeft="20dp"
-        android:layout_weight="1"
+        android:visibility="gone"
         tools:listitem="@layout/scan_list_item"
+        tools:visibility="visible"/>
+
+    <TextView
+        android:id="@+id/empty_scan_list"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="No devices found by scanner"
+        android:layout_margin="10dp"
+        android:padding="10dp"
+        android:textColor="@color/colorPrimaryDark"
+        android:visibility="visible"
+        tools:visibility="gone"
         />
 </LinearLayout>

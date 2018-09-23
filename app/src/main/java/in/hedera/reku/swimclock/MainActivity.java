@@ -27,10 +27,10 @@ import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.MenuItem;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import com.silabs.bluetooth_mesh.BluetoothMesh;
+import com.silabs.bluetooth_mesh.ConfigOperation;
 import com.silabs.bluetooth_mesh.DeviceInfo;
 import com.silabs.bluetooth_mesh.MeshCallback;
 import com.silabs.bluetooth_mesh.NetworkInfo;
@@ -45,18 +45,18 @@ import in.hedera.reku.swimclock.scanner.ScannerInterface;
 import in.hedera.reku.swimclock.settings.SettingsFragment;
 import in.hedera.reku.swimclock.utils.Constants;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements FragListener {
     private static final String TAG = MainActivity.class.getSimpleName();
 
     private static final int PERMISSIONS_REQUEST_ALL_PERMISSIONS = 101;
     private final Object mConnectionLock = new Object(); // Lock variable
     public boolean isBTEnabled;
-    private TextView mTextMessage;
     private BluetoothMesh btmesh;
     private BluetoothLeService bleService;
     private boolean isBound = false;
     private String provisionMac;
     private String proxyMac;
+    private NetworkInfo netInfo;
 
     private BottomNavigationView.OnNavigationItemSelectedListener mOnNavigationItemSelectedListener
             = new BottomNavigationView.OnNavigationItemSelectedListener() {
@@ -64,25 +64,29 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public boolean onNavigationItemSelected(@NonNull MenuItem item) {
             Fragment fragment = null;
+            String tag = null;
             switch (item.getItemId()) {
                 case R.id.navigation_home:
                     fragment = new HomeFragment();
+                    tag = Constants.HOME_TAG;
                     break;
                 case R.id.navigation_scanner:
                     if (needPermissions(getApplicationContext())) {
                         requestPermissions();
                     }
-                    if (getBTStatus() & isBTEnabled)
+                    if (getBTStatus() & isBTEnabled) {
                         fragment = new ScannerFragment();
-                    else {
+                        tag = Constants.SCAN_TAG;
+                    } else {
                         askBTSettings();
                     }
                     break;
                 case R.id.navigation_settings:
                     fragment = new SettingsFragment();
+                    tag = Constants.SETTINGS_TAG;
                     break;
             }
-            return loadFragment(fragment);
+            return loadFragment(fragment, tag);
         }
     };
 
@@ -93,8 +97,7 @@ public class MainActivity extends AppCompatActivity {
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
 
         // load the default fragment
-        loadFragment(new HomeFragment());
-        mTextMessage = (TextView) findViewById(R.id.message);
+        loadFragment(new HomeFragment(), Constants.HOME_TAG);
         BottomNavigationView navigation = (BottomNavigationView) findViewById(R.id.navigation);
         navigation.setOnNavigationItemSelectedListener(mOnNavigationItemSelectedListener);
 
@@ -104,6 +107,12 @@ public class MainActivity extends AppCompatActivity {
 
         // Create bluetooth mesh
         btmesh = new BluetoothMesh(getApplicationContext(), btmeshCallback);
+        if (!btmesh.getNetworkDB().isEmpty()) {
+            netInfo = btmesh.getNetworkDB().get(0);
+            Log.d(TAG, "Network DB contains some meshes " + netInfo.name());
+        } else {
+            Log.d(TAG, "No Networks in Network DB");
+        }
 
         // start LE service
         Intent intent = new Intent(this, BluetoothLeService.class);
@@ -154,12 +163,12 @@ public class MainActivity extends AppCompatActivity {
         unregisterReceivers();
     }
 
-    private boolean loadFragment(Fragment fragment) {
+    private boolean loadFragment(Fragment fragment, String tag) {
         //switching fragment
         if (fragment != null) {
             getSupportFragmentManager()
                     .beginTransaction()
-                    .replace(R.id.fragment_container, fragment)
+                    .replace(R.id.fragment_container, fragment, tag)
                     .commit();
             return true;
         }
@@ -233,6 +242,51 @@ public class MainActivity extends AppCompatActivity {
 
     private final MeshCallback btmeshCallback = new MeshCallback() {
         @Override
+        public void appKeyCreated(String name, int netKeyIndex, int appKeyIndex, byte[] appKey) {
+            super.appKeyCreated(name, netKeyIndex, appKeyIndex, appKey);
+        }
+
+        @Override
+        public void gattWrite(int gattHandle, byte[] send) {
+            super.gattWrite(gattHandle, send);
+        }
+
+        @Override
+        public void didReceiveDCD(byte[] dcd, int status) {
+            super.didReceiveDCD(dcd, status);
+        }
+
+        @Override
+        public void gattRequest(int gattHandle) {
+            super.gattRequest(gattHandle);
+        }
+
+        @Override
+        public void didExportRequest(Intent shareIntent) {
+            super.didExportRequest(shareIntent);
+        }
+
+        @Override
+        public void didOOBAuthdisplay(byte[] uuid, int input_action, int input_size, byte[] auth_data) {
+            super.didOOBAuthdisplay(uuid, input_action, input_size, auth_data);
+        }
+
+        @Override
+        public void didOOBAuthRequest(byte[] uuid, int output_action, int output_size) {
+            super.didOOBAuthRequest(uuid, output_action, output_size);
+        }
+
+        @Override
+        public void didCompleteConfig(ConfigOperation previous_cfg, ConfigOperation next_cfg) {
+            super.didCompleteConfig(previous_cfg, next_cfg);
+        }
+
+        @Override
+        public void statusCallback(int model, int device_address, int current_status, int target_status, int remaining_ms) {
+            super.statusCallback(model, device_address, current_status, target_status, remaining_ms);
+        }
+
+        @Override
         public void didSuccessProvision(int meshAddress, byte[] deviceUuid, int status) {
             super.didSuccessProvision(meshAddress, deviceUuid, status);
             if (status == 0) { // provison success
@@ -256,6 +310,10 @@ public class MainActivity extends AppCompatActivity {
             defaultNetwork.setNetID(index);
             btmesh.saveNetworkDB(defaultNetwork);
 //            createDemoGroup(defaultNetwork);
+            HomeFragment homeFragment = (HomeFragment) getSupportFragmentManager().findFragmentByTag(Constants.HOME_TAG);
+            if(homeFragment != null) {
+                homeFragment.onNetworkCreated();
+            }
         }
 
         @Override
@@ -285,11 +343,32 @@ public class MainActivity extends AppCompatActivity {
     public void provisonDevice(String mac) {
         synchronized (mConnectionLock) {
             provisionMac = mac;
-            if(!bleService.isConnected()) {
+            if (!bleService.isConnected()) {
                 bleService.connect(mac, BluetoothGatt.CONNECTION_PRIORITY_HIGH);
             } else {
                 bleService.disconnect();
             }
+        }
+    }
+
+    @Override
+    public void createNetwork(String name) {
+        if(btmesh != null) {
+            byte[] netKey = Constants.createNetKey();
+            Log.d(TAG, netKey.toString());
+            btmesh.createNetwork(name, netKey);
+        }
+    }
+
+    @Override
+    public void startProvision(String mac) {
+
+    }
+
+    @Override
+    public void deleteNetwork() {
+        if(btmesh != null) {
+            btmesh.cleanDB();
         }
     }
 
@@ -349,7 +428,7 @@ public class MainActivity extends AppCompatActivity {
                 proxyMac = result.getDevice().getAddress();
                 bleScanner.stopScanning();
                 synchronized (mConnectionLock) {
-                    if(!bleService.isConnected()) {
+                    if (!bleService.isConnected()) {
                         bleService.connect(proxyMac, BluetoothGatt.CONNECTION_PRIORITY_BALANCED);
                     } else {
                         bleService.disconnect();

@@ -4,6 +4,5 @@
     <string name="title_scanner">Scanner</string>
     <string name="title_settings">Settings</string>
 
-    <!-- TODO: Remove or change this placeholder text -->
-    <string name="hello_blank_fragment">Hello blank fragment</string>
+    <string name="networks_empty">No Networks created. Press the button below to create your first network</string>
 </resources>

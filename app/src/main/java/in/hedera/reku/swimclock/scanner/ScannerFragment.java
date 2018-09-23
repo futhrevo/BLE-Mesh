@@ -5,6 +5,7 @@ import android.arch.lifecycle.Observer;
 import android.arch.lifecycle.ViewModelProviders;
 import android.bluetooth.le.ScanFilter;
 import android.bluetooth.le.ScanResult;
+import android.content.Context;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.ParcelUuid;
@@ -20,6 +21,8 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ProgressBar;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.silabs.bluetooth_mesh.BluetoothMesh;
@@ -27,9 +30,11 @@ import com.silabs.bluetooth_mesh.BluetoothMesh;
 import java.util.ArrayList;
 import java.util.List;
 
-import in.hedera.reku.swimclock.utils.Constants;
+import in.hedera.reku.swimclock.FragListener;
+import in.hedera.reku.swimclock.MainActivity;
 import in.hedera.reku.swimclock.R;
 import in.hedera.reku.swimclock.store.NPDevice.NPDevice;
+import in.hedera.reku.swimclock.utils.Constants;
 
 /**
  * A simple {@link Fragment} subclass.
@@ -45,9 +50,29 @@ public class ScannerFragment extends Fragment implements ScannerInterface {
     private Toast toast;
     private Menu menu;
     private NPDViewModel npdViewModel;
+    private RecyclerView recyclerView;
+    private ProgressBar progressBar;
+    private TextView emptyView;
+    FragListener callback;
 
     public ScannerFragment() {
         // Required empty public constructor
+    }
+
+    @Override
+    public void onAttach(Context context) {
+        super.onAttach(context);
+        try {
+            callback = (MainActivity) context;
+        } catch (ClassCastException e) {
+            throw new ClassCastException(context.toString() + " must implement FragListener");
+        }
+    }
+
+    @Override
+    public void onDetach() {
+        callback = null;
+        super.onDetach();
     }
 
     @Override
@@ -63,7 +88,9 @@ public class ScannerFragment extends Fragment implements ScannerInterface {
                              Bundle savedInstanceState) {
         // Inflate the layout for this fragment
         View view = inflater.inflate(R.layout.fragment_scanner, container, false);
-        RecyclerView recyclerView = view.findViewById(R.id.deviceList);
+        recyclerView = view.findViewById(R.id.deviceList);
+        emptyView = view.findViewById(R.id.empty_scan_list);
+        progressBar = view.findViewById(R.id.progress_bar_scan);
         final NPDeviceAdapter adapter = new NPDeviceAdapter(getContext());
         recyclerView.setAdapter(adapter);
         bleScanner = new BleScanner(getContext());
@@ -85,6 +112,7 @@ public class ScannerFragment extends Fragment implements ScannerInterface {
             @Override
             public void onChanged(@Nullable List<NPDevice> npDevices) {
                 adapter.setNpDevices(npDevices);
+                toggleEmptyLayout(!ble_scanning && npDevices.isEmpty());
             }
         });
         Log.d(TAG, "oncreateview");
@@ -121,11 +149,22 @@ public class ScannerFragment extends Fragment implements ScannerInterface {
         MenuItem item = menu.findItem(R.id.scan_menu);
         if (b) {
             item.setTitle("STOP");
+            progressBar.setVisibility(View.VISIBLE);
         } else {
             item.setTitle("SCAN");
+            progressBar.setVisibility(View.GONE);
         }
     }
 
+    private void toggleEmptyLayout(boolean empty) {
+        if(empty) {
+            recyclerView.setVisibility(View.GONE);
+            emptyView.setVisibility(View.VISIBLE);
+        }else {
+            recyclerView.setVisibility(View.VISIBLE);
+            emptyView.setVisibility(View.GONE);
+        }
+    }
     @Override
     public void scanResult(ScanResult result) {
         NPDevice npDevice = new NPDevice(result.getDevice(), result.getRssi());
