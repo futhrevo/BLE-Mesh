@@ -22,17 +22,18 @@
         android:paddingLeft="20dp"
         android:visibility="gone"
         tools:listitem="@layout/scan_list_item"
-        tools:visibility="visible"/>
+        tools:visibility="gone"/>
 
     <TextView
         android:id="@+id/empty_scan_list"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="No devices found by scanner"
         android:layout_margin="10dp"
+        android:gravity="center"
         android:padding="10dp"
+        android:text="No devices found in cache. Press 'scan' to scan again"
+        android:textAlignment="center"
         android:textColor="@color/colorPrimaryDark"
         android:visibility="visible"
-        tools:visibility="gone"
-        />
+        tools:visibility="visible" />
 </LinearLayout>

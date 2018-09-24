@@ -15,10 +15,12 @@
         android:id="@+id/progress_bar_nw"/>
 
     <LinearLayout
+        android:id="@+id/empty_nw_layout"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:layout_gravity="center_vertical">
+        android:layout_gravity="center_vertical"
+        tools:visibility="gone">
 
         <TextView
             android:id="@+id/msg_empty"
@@ -41,5 +43,75 @@
             android:text="Create Network" />
     </LinearLayout>
 
+    <LinearLayout
+        android:id="@+id/network_layout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+        <RelativeLayout
+            android:id="@+id/network_title_layout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <TextView
+                android:id="@+id/network_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_margin="12dp"
+                android:textStyle="bold"
+                tools:text="Network Name" />
+
+            <TextView
+                android:id="@+id/device_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentEnd="true"
+                android:layout_centerVertical="true"
+                android:layout_marginEnd="18dp"
+                android:text="Devices" />
+
+            <TextView
+                android:id="@+id/device_count"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_margin="12dp"
+                android:layout_toLeftOf="@+id/device_label"
+                android:textStyle="bold"
+                tools:text="0" />
+        </RelativeLayout>
+
+        <ExpandableListView
+            android:id="@+id/expandable_group_list"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            tools:visibility="gone"
+            >
+
+        </ExpandableListView>
+
+        <LinearLayout
+            android:id="@+id/group_list_emptyview"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_margin="12dp"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:visibility="gone"
+            tools:visibility="visible">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="No device in network, provision your first device and add to this network"
+                android:textAlignment="center"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/scan_provision_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Scan and Provision" />
+        </LinearLayout>
+    </LinearLayout>
 
 </FrameLayout>

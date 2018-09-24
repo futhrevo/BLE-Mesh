@@ -25,8 +25,10 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.Fragment;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
+import android.util.Base64;
 import android.util.Log;
 import android.view.MenuItem;
+import android.view.WindowManager;
 import android.widget.Toast;
 
 import com.silabs.bluetooth_mesh.BluetoothMesh;
@@ -37,6 +39,7 @@ import com.silabs.bluetooth_mesh.NetworkInfo;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 import in.hedera.reku.swimclock.home.HomeFragment;
 import in.hedera.reku.swimclock.scanner.BleScanner;
@@ -56,7 +59,11 @@ public class MainActivity extends AppCompatActivity implements FragListener {
     private boolean isBound = false;
     private String provisionMac;
     private String proxyMac;
+    private String mac;
+    private boolean isGattPending = false;
+    private int gattPriority = BluetoothGatt.CONNECTION_PRIORITY_BALANCED;
     private NetworkInfo netInfo;
+    private DeviceInfo deviceInfo;
 
     private BottomNavigationView.OnNavigationItemSelectedListener mOnNavigationItemSelectedListener
             = new BottomNavigationView.OnNavigationItemSelectedListener() {
@@ -179,6 +186,7 @@ public class MainActivity extends AppCompatActivity implements FragListener {
         return ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED
                 || ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH) != PackageManager.PERMISSION_GRANTED
                 || ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_ADMIN) != PackageManager.PERMISSION_GRANTED
+                || ActivityCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
                 ;
     }
 
@@ -187,7 +195,8 @@ public class MainActivity extends AppCompatActivity implements FragListener {
         String[] permissions = new String[]{
                 Manifest.permission.ACCESS_COARSE_LOCATION,
                 Manifest.permission.BLUETOOTH,
-                Manifest.permission.BLUETOOTH_ADMIN
+                Manifest.permission.BLUETOOTH_ADMIN,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE
         };
         ActivityCompat.requestPermissions(this, permissions, PERMISSIONS_REQUEST_ALL_PERMISSIONS);
     }
@@ -244,59 +253,76 @@ public class MainActivity extends AppCompatActivity implements FragListener {
         @Override
         public void appKeyCreated(String name, int netKeyIndex, int appKeyIndex, byte[] appKey) {
             super.appKeyCreated(name, netKeyIndex, appKeyIndex, appKey);
+            Log.d(TAG, "BTMESH appKeyCreated ");
         }
 
         @Override
         public void gattWrite(int gattHandle, byte[] send) {
             super.gattWrite(gattHandle, send);
+            Log.d(TAG, "BTMESH asking gattWrite");
+            if(mac.equals(provisionMac)) {
+                bleService.writeProvisionInChar(0, send);
+            }
         }
 
         @Override
         public void didReceiveDCD(byte[] dcd, int status) {
             super.didReceiveDCD(dcd, status);
+            Log.d(TAG, "BTMESH asking didReceiveDCD" + String.valueOf(status));
         }
 
         @Override
         public void gattRequest(int gattHandle) {
             super.gattRequest(gattHandle);
+            Log.d(TAG, "BTMESH asking gattRequest");
+            connectGatt();
         }
 
         @Override
         public void didExportRequest(Intent shareIntent) {
             super.didExportRequest(shareIntent);
+            Log.d(TAG, "BTMESH asking didExportRequest");
         }
 
         @Override
         public void didOOBAuthdisplay(byte[] uuid, int input_action, int input_size, byte[] auth_data) {
             super.didOOBAuthdisplay(uuid, input_action, input_size, auth_data);
+            Log.d(TAG, "BTMESH asking didOOBAuthdisplay");
         }
 
         @Override
         public void didOOBAuthRequest(byte[] uuid, int output_action, int output_size) {
             super.didOOBAuthRequest(uuid, output_action, output_size);
+            Log.d(TAG, "BTMESH asking didOOBAuthRequest");
         }
 
         @Override
         public void didCompleteConfig(ConfigOperation previous_cfg, ConfigOperation next_cfg) {
             super.didCompleteConfig(previous_cfg, next_cfg);
+            Log.d(TAG, "BTMESH asking didCompleteConfig");
         }
 
         @Override
         public void statusCallback(int model, int device_address, int current_status, int target_status, int remaining_ms) {
             super.statusCallback(model, device_address, current_status, target_status, remaining_ms);
+            Log.d(TAG, "BTMESH asking statusCallback");
         }
 
         @Override
         public void didSuccessProvision(int meshAddress, byte[] deviceUuid, int status) {
             super.didSuccessProvision(meshAddress, deviceUuid, status);
+            Log.d(TAG, "BTMESH asking didSuccessProvision" + String.valueOf(status));
             if (status == 0) { // provison success
                 addDeviceInfo(meshAddress, deviceUuid);
+                provisionMac = null;
+                new ConnectProxy(getApplicationContext());
             }
         }
 
         @Override
         public void disconnectionRequest(int gattHandle) {
             super.disconnectionRequest(gattHandle);
+            Log.d(TAG, "BTMESH asking disconnectionRequest");
             bleService.disconnect();
             btmesh.disconnectGatt(gattHandle);
         }
@@ -304,6 +330,7 @@ public class MainActivity extends AppCompatActivity implements FragListener {
         @Override
         public void networkCreated(String name, int index, byte[] netKey) {
             super.networkCreated(name, index, netKey);
+            Log.d(TAG, "BTMESH asking networkCreated " + name);
             NetworkInfo defaultNetwork = new NetworkInfo();
             defaultNetwork.setName(name);
             defaultNetwork.setNetwork_key(netKey);
@@ -312,13 +339,14 @@ public class MainActivity extends AppCompatActivity implements FragListener {
 //            createDemoGroup(defaultNetwork);
             HomeFragment homeFragment = (HomeFragment) getSupportFragmentManager().findFragmentByTag(Constants.HOME_TAG);
             if(homeFragment != null) {
-                homeFragment.onNetworkCreated();
+                homeFragment.onNetworkCreated(defaultNetwork);
             }
         }
 
         @Override
         public void stateChanged(int state) {
             super.stateChanged(state);
+            Log.d(TAG, "BTMESH asking stateChanged " + String.valueOf(state));
             switch (state) {
                 case BluetoothMesh.INITIALISED:
                     Log.d(TAG, "Mesh Initialized");
@@ -332,25 +360,22 @@ public class MainActivity extends AppCompatActivity implements FragListener {
     };
 
     private void addDeviceInfo(int meshAddress, byte[] deviceUuid) {
-        DeviceInfo clock = new DeviceInfo("name", deviceUuid);
-        NetworkInfo netinfo = btmesh.getNetworkDB().get(0);
-        clock.addToNetwork(netinfo, meshAddress);
-        netinfo.addDevice(clock);
+        deviceInfo = new DeviceInfo("name", deviceUuid);
+        NetworkInfo netinfo = btmesh.getNetworkbyID(0);
+        deviceInfo.addToNetwork(netinfo, meshAddress);
+        netinfo.addDevice(deviceInfo);
         btmesh.saveNetworkDB(netinfo);
 
     }
 
-    public void provisonDevice(String mac) {
-        synchronized (mConnectionLock) {
-            provisionMac = mac;
-            if (!bleService.isConnected()) {
-                bleService.connect(mac, BluetoothGatt.CONNECTION_PRIORITY_HIGH);
-            } else {
-                bleService.disconnect();
-            }
+    public void connectGatt() {
+        isGattPending = true;
+        if(bleService.isConnected()) {
+            bleService.disconnect();
+        } else {
+            bleService.connect(mac, gattPriority);
         }
     }
-
     @Override
     public void createNetwork(String name) {
         if(btmesh != null) {
@@ -361,14 +386,55 @@ public class MainActivity extends AppCompatActivity implements FragListener {
     }
 
     @Override
-    public void startProvision(String mac) {
+    public void readNetInfo() {
+        if(btmesh != null) {
+            NetworkInfo netinfo = btmesh.getNetworkbyID(0);
+            HomeFragment homeFragment = (HomeFragment) getSupportFragmentManager().findFragmentByTag(Constants.HOME_TAG);
+            if(homeFragment != null) {
+                homeFragment.showNetInfo(netInfo);
+            }
+        }
+    }
 
+    @Override
+    public void gotoScannerScreen() {
+        if (needPermissions(getApplicationContext())) {
+            requestPermissions();
+        }
+        if (getBTStatus() & isBTEnabled) {
+            Fragment fragment = new ScannerFragment();
+            String tag = Constants.SCAN_TAG;
+            loadFragment(fragment, tag);
+        } else {
+            askBTSettings();
+        }
+    }
+
+    @Override
+    public void startProvision(String mac, String advertisement) {
+        if(btmesh != null) {
+            provisionMac = mac;
+            this.mac = provisionMac;
+            gattPriority = BluetoothGatt.CONNECTION_PRIORITY_HIGH;
+            NetworkInfo net = btmesh.getNetworkbyID(0);
+            byte[] advbytes = Base64.decode(advertisement, Base64.NO_WRAP);
+            btmesh.provisionDevice(net, advbytes, 0, 69);
+        }
     }
 
     @Override
     public void deleteNetwork() {
         if(btmesh != null) {
             btmesh.cleanDB();
+        }
+    }
+
+    @Override
+    public void disableUIinteraction(boolean on) {
+        if(on) {
+            getWindow().setFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE, WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE);
+        } else {
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE);
         }
     }
 
@@ -427,12 +493,11 @@ public class MainActivity extends AppCompatActivity implements FragListener {
                 if (!idMatch && !netMatch) return;
                 proxyMac = result.getDevice().getAddress();
                 bleScanner.stopScanning();
-                synchronized (mConnectionLock) {
-                    if (!bleService.isConnected()) {
-                        bleService.connect(proxyMac, BluetoothGatt.CONNECTION_PRIORITY_BALANCED);
-                    } else {
-                        bleService.disconnect();
-                    }
+                mac = proxyMac;
+                gattPriority = BluetoothGatt.CONNECTION_PRIORITY_BALANCED;
+                int status = btmesh.initBluetoothMeshProxy(0, 69);
+                if(status != 0) {
+                    Log.e(TAG, "Error white initBluetoothMeshProxy");
                 }
             }
         }
@@ -470,6 +535,8 @@ public class MainActivity extends AppCompatActivity implements FragListener {
         intentFilter.addAction(Constants.ACTION_GATT_SERVICES_ERROR);
         intentFilter.addAction(Constants.ACTION_MTU_CHANGED);
         intentFilter.addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED);
+        intentFilter.addAction(Constants.ACTION_CHARACTERISTIC_WRITE);
+        intentFilter.addAction(Constants.ACTION_CHARACTERISTIC_CHANGE);
         return intentFilter;
     }
 
@@ -480,16 +547,48 @@ public class MainActivity extends AppCompatActivity implements FragListener {
             if (Constants.ACTION_GATT_CONNECTED.equals(action)) {
 
             } else if (Constants.ACTION_GATT_DISCONNECTED.equals(action)) {
-
+                if(btmesh != null) {
+                    btmesh.disconnectGatt(0);
+                }
             } else if (Constants.ACTION_GATT_SERVICES_DISCOVERED.equals(action)) {
 
             } else if (Constants.ACTION_DATA_AVAILABLE.equals(action)) {
+                final byte[] data = intent.getByteArrayExtra(Constants.EXTRA_DATA);
+                ParcelUuid uuidExtra = intent.getParcelableExtra(Constants.EXTRA_CHARACTERISTIC);
+                UUID uuid = uuidExtra.getUuid();
 
             } else if (Constants.ACTION_GATT_SERVICES_ERROR.equals(action)) {
 
             } else if (Constants.ACTION_MTU_CHANGED.equals(action)) {
+                if(btmesh != null) {
+                    btmesh.connectGatt(0);
+                }
+                if(mac.equals(provisionMac)) {
+                    bleService.enableProvisionOutNotification();
+                }
+                if(mac.equals(proxyMac)) {
+                    if(deviceInfo != null) {
+                        btmesh.DCDRequest(deviceInfo);
+                        deviceInfo = null;
+                    }
+                }
+            } else if (Constants.ACTION_CHARACTERISTIC_WRITE.equals(action)) {
+                final byte[] data = intent.getByteArrayExtra(Constants.EXTRA_DATA);
+                ParcelUuid uuidExtra = intent.getParcelableExtra(Constants.EXTRA_CHARACTERISTIC);
+                UUID uuid = uuidExtra.getUuid();
 
-            } else if (BluetoothDevice.ACTION_BOND_STATE_CHANGED.equals(action)) {
+                if(mac.equals(provisionMac)) {
+
+                }
+
+            } else if(Constants.ACTION_CHARACTERISTIC_CHANGE.equals(action)) {
+                final byte[] data = intent.getByteArrayExtra(Constants.EXTRA_DATA);
+                ParcelUuid uuidExtra = intent.getParcelableExtra(Constants.EXTRA_CHARACTERISTIC);
+                UUID uuid = uuidExtra.getUuid();
+                if(uuid.equals(BluetoothMesh.meshUnprovisionedInChar)) {
+                    btmesh.write(0, data);
+                }
+            }else if (BluetoothDevice.ACTION_BOND_STATE_CHANGED.equals(action)) {
 
             }
         }

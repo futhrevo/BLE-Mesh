@@ -37,4 +37,10 @@
             tools:text="rssi" />
     </LinearLayout>
 
+    <TextView
+        android:id="@+id/bdadv"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        />
 </LinearLayout>

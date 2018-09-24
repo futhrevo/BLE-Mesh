@@ -103,6 +103,7 @@ public class BluetoothLeService extends Service {
             bleQueue.onCharacteristicWrite(gatt, characteristic, status);
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 Log.d(TAG, "Characteristic writing successful");
+                broadcastUpdate(Constants.ACTION_CHARACTERISTIC_WRITE, characteristic);
             } else if (status == BluetoothGatt.GATT_INSUFFICIENT_AUTHENTICATION) {
                 // this is where the tricky part comes
                 if (gatt.getDevice().getBondState() == BluetoothDevice.BOND_NONE) {
@@ -118,7 +119,7 @@ public class BluetoothLeService extends Service {
         @Override
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
             super.onCharacteristicChanged(gatt, characteristic);
-            broadcastUpdate(Constants.ACTION_DATA_AVAILABLE, characteristic);
+            broadcastUpdate(Constants.ACTION_CHARACTERISTIC_CHANGE, characteristic);
         }
 
         @Override

@@ -19,12 +19,14 @@ public class NPDeviceAdapter extends RecyclerView.Adapter<NPDeviceAdapter.NPDevi
         private TextView bdname;
         private TextView bdaddr;
         private TextView bdrssi;
+        private TextView bdadv;
 
         private NPDeviceViewHolder(View itemView) {
             super(itemView);
             bdname = itemView.findViewById(R.id.bdname);
             bdrssi = itemView.findViewById(R.id.bdrssi);
             bdaddr = itemView.findViewById(R.id.bdaddr);
+            bdadv = itemView.findViewById(R.id.bdadv);
         }
     }
 
@@ -49,6 +51,7 @@ public class NPDeviceAdapter extends RecyclerView.Adapter<NPDeviceAdapter.NPDevi
             holder.bdaddr.setText(current.getMac());
             holder.bdname.setText(current.getName());
             holder.bdrssi.setText(current.getRssi() + " dBm");
+            holder.bdadv.setText(current.getAdv());
         } else {
             holder.bdname.setText("NO DEVICES FOUND");
         }

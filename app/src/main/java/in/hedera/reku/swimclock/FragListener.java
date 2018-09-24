@@ -7,9 +7,13 @@ package in.hedera.reku.swimclock;
 public interface FragListener {
     // Home Fragment
     void createNetwork(String name);
+    void readNetInfo();
+    void gotoScannerScreen();
 
     // Scan Fragment
-    void startProvision(String mac);
+    void startProvision(String mac, String advertisement);
 
     void deleteNetwork();
+
+    void disableUIinteraction(boolean on);
 }

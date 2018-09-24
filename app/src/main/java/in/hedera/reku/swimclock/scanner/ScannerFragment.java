@@ -9,16 +9,19 @@ import android.content.Context;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.ParcelUuid;
+import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.util.Log;
+import android.view.GestureDetector;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ProgressBar;
@@ -55,6 +58,7 @@ public class ScannerFragment extends Fragment implements ScannerInterface {
     private TextView emptyView;
     FragListener callback;
 
+    // TODO: Show snackbar while scanning / prevent navigation
     public ScannerFragment() {
         // Required empty public constructor
     }
@@ -73,6 +77,14 @@ public class ScannerFragment extends Fragment implements ScannerInterface {
     public void onDetach() {
         callback = null;
         super.onDetach();
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        if(ble_scanning) {
+            bleScanner.stopScanning();
+        }
     }
 
     @Override
@@ -95,19 +107,26 @@ public class ScannerFragment extends Fragment implements ScannerInterface {
         recyclerView.setAdapter(adapter);
         bleScanner = new BleScanner(getContext());
         recyclerView.setLayoutManager( new LinearLayoutManager(getContext()));
-//        listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
-//            @Override
-//            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-//                if (ble_scanning) {
-//                    setScanState(false);
-//                    bleScanner.stopScanning();
-//                }
-//                ScanDevice device = scanListAdapter.getDevice(position);
-//                if (toast != null) {
-//                    toast.cancel();
-//                }
-//            }
-//        });
+        recyclerView.addOnItemTouchListener(new RecyclerTouchListener(getContext(), recyclerView, new ClickListener() {
+            @Override
+            public void onClick(View view, int position) {
+                if (ble_scanning) {
+                    setScanState(false);
+                    bleScanner.stopScanning();
+                }
+                TextView addView = view.findViewById(R.id.bdaddr);
+                TextView adView = view.findViewById(R.id.bdadv);
+                String mac = (String) addView.getText();
+                String advertisement = (String) adView.getText();
+                Log.d(TAG, "provision me " + mac +" advertising " + advertisement);
+                callback.startProvision(mac, advertisement);
+            }
+
+            @Override
+            public void onLongClick(View view, int position) {
+
+            }
+        }));
         npdViewModel.getAllNPdevices().observe(this, new Observer<List<NPDevice>>() {
             @Override
             public void onChanged(@Nullable List<NPDevice> npDevices) {
@@ -147,6 +166,9 @@ public class ScannerFragment extends Fragment implements ScannerInterface {
     private void setScanState(boolean b) {
         ble_scanning = b;
         MenuItem item = menu.findItem(R.id.scan_menu);
+        if(item == null) {
+            return;
+        }
         if (b) {
             item.setTitle("STOP");
             progressBar.setVisibility(View.VISIBLE);
@@ -167,7 +189,7 @@ public class ScannerFragment extends Fragment implements ScannerInterface {
     }
     @Override
     public void scanResult(ScanResult result) {
-        NPDevice npDevice = new NPDevice(result.getDevice(), result.getRssi());
+        NPDevice npDevice = new NPDevice(result.getDevice(), result.getRssi(), result.getScanRecord().getBytes());
         npdViewModel.insert(npDevice);
     }
 
@@ -204,5 +226,46 @@ public class ScannerFragment extends Fragment implements ScannerInterface {
             bleScanner.stopScanning();
         }
 
+    }
+
+    public class RecyclerTouchListener implements RecyclerView.OnItemTouchListener {
+        private ClickListener clicklistener;
+        private GestureDetector gestureDetector;
+
+        public RecyclerTouchListener(Context context, final RecyclerView recycleView, final ClickListener clicklistener){
+            this.clicklistener=clicklistener;
+            gestureDetector=new GestureDetector(context,new GestureDetector.SimpleOnGestureListener(){
+                @Override
+                public boolean onSingleTapUp(MotionEvent e) {
+                    return true;
+                }
+
+                @Override
+                public void onLongPress(MotionEvent e) {
+                    View child=recycleView.findChildViewUnder(e.getX(),e.getY());
+                    if(child!=null && clicklistener!=null){
+                        clicklistener.onLongClick(child,recycleView.getChildAdapterPosition(child));
+                    }
+                }
+            });
+        }
+        @Override
+        public boolean onInterceptTouchEvent(@NonNull RecyclerView rv, @NonNull MotionEvent e) {
+            View child=rv.findChildViewUnder(e.getX(),e.getY());
+            if(child!=null && clicklistener!=null && gestureDetector.onTouchEvent(e)){
+                clicklistener.onClick(child,rv.getChildAdapterPosition(child));
+            }
+            return false;
+        }
+
+        @Override
+        public void onTouchEvent(@NonNull RecyclerView recyclerView, @NonNull MotionEvent motionEvent) {
+
+        }
+
+        @Override
+        public void onRequestDisallowInterceptTouchEvent(boolean b) {
+
+        }
     }
 }

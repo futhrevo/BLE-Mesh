@@ -21,6 +21,8 @@ public class Constants {
     public static final String EXTRA_CHARACTERISTIC = "in.hedera.reku.swimclock.EXTRA_CHARACTERISTIC";
     public static final String ACTION_GATT_SERVICES_ERROR = "in.hedera.reku.swimclock.ACTION_GATT_SERVICES_ERROR";
     public static final String ACTION_MTU_CHANGED = "in.hedera.reku.swimclock.ACTION_MTU_CHANGED";
+    public static final String ACTION_CHARACTERISTIC_WRITE = "in.hedera.reku.swimclock.ACTION_CHARACTERISTIC_WRITE";
+    public static final String ACTION_CHARACTERISTIC_CHANGE = "in.hedera.reku.swimclock.ACTION_CHARACTERISTIC_CHANGE";
 
     // byte[] with size 16
     public static byte[] createNetKey() {
