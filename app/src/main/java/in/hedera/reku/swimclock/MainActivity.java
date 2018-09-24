@@ -34,19 +34,42 @@ import android.widget.Toast;
 import com.silabs.bluetooth_mesh.BluetoothMesh;
 import com.silabs.bluetooth_mesh.ConfigOperation;
 import com.silabs.bluetooth_mesh.DeviceInfo;
+import com.silabs.bluetooth_mesh.GroupInfo;
 import com.silabs.bluetooth_mesh.MeshCallback;
 import com.silabs.bluetooth_mesh.NetworkInfo;
+import com.silabs.bluetooth_mesh.Utils.Converters;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import de.halfbit.tinymachine.StateHandler;
+import de.halfbit.tinymachine.TinyMachine;
 import in.hedera.reku.swimclock.home.HomeFragment;
 import in.hedera.reku.swimclock.scanner.BleScanner;
 import in.hedera.reku.swimclock.scanner.ScannerFragment;
 import in.hedera.reku.swimclock.scanner.ScannerInterface;
 import in.hedera.reku.swimclock.settings.SettingsFragment;
 import in.hedera.reku.swimclock.utils.Constants;
+
+import static com.silabs.bluetooth_mesh.ConfigOperation.Status.mesh_foundation_status_success;
+import static in.hedera.reku.swimclock.utils.Constants.MESH_GROUP_APPKEY;
+import static in.hedera.reku.swimclock.utils.Constants.MESH_INIT;
+import static in.hedera.reku.swimclock.utils.Constants.MESH_READY;
+import static in.hedera.reku.swimclock.utils.Constants.PROVISION_DISCONNECT;
+import static in.hedera.reku.swimclock.utils.Constants.PROVISION_INIT;
+import static in.hedera.reku.swimclock.utils.Constants.PROVISION_READY;
+import static in.hedera.reku.swimclock.utils.Constants.PROVISION_SEND;
+import static in.hedera.reku.swimclock.utils.Constants.PROVISION_START;
+import static in.hedera.reku.swimclock.utils.Constants.PROVISION_WRITE;
+import static in.hedera.reku.swimclock.utils.Constants.PROXY_INIT;
+import static in.hedera.reku.swimclock.utils.Constants.PROXY_READY;
+import static in.hedera.reku.swimclock.utils.Constants.PROXY_SEND;
+import static in.hedera.reku.swimclock.utils.Constants.PROXY_SET;
+import static in.hedera.reku.swimclock.utils.Constants.PROXY_SET_SEND;
+import static in.hedera.reku.swimclock.utils.Constants.PROXY_SET_WRITE;
+import static in.hedera.reku.swimclock.utils.Constants.PROXY_START;
+import static in.hedera.reku.swimclock.utils.Constants.PROXY_WRITE;
 
 public class MainActivity extends AppCompatActivity implements FragListener {
     private static final String TAG = MainActivity.class.getSimpleName();
@@ -64,6 +87,436 @@ public class MainActivity extends AppCompatActivity implements FragListener {
     private int gattPriority = BluetoothGatt.CONNECTION_PRIORITY_BALANCED;
     private NetworkInfo netInfo;
     private DeviceInfo deviceInfo;
+
+    private TinyMachine meshMachine;
+    private TinyMachine provisionMachine;
+    private TinyMachine proxyMachine;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+
+        // load the default fragment
+        loadFragment(new HomeFragment(), Constants.HOME_TAG);
+        BottomNavigationView navigation = (BottomNavigationView) findViewById(R.id.navigation);
+        navigation.setOnNavigationItemSelectedListener(mOnNavigationItemSelectedListener);
+
+        if (needPermissions(this)) {
+            requestPermissions();
+        }
+
+        meshMachine = new TinyMachine(new MeshHandler(), MESH_INIT);
+        provisionMachine = new TinyMachine(new ProvisionHandler(), Constants.PROVISION_INIT);
+        proxyMachine = new TinyMachine(new ProxyHandler(), Constants.PROXY_INIT);
+
+        meshMachine.fireEvent("INIT");
+        // start LE service
+        Intent intent = new Intent(this, BluetoothLeService.class);
+        bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE);
+        registerReceivers();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        getBTStatus();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        unregisterReceivers();
+    }
+
+    private final MeshCallback btmeshCallback = new MeshCallback() {
+        @Override
+        public void appKeyCreated(String name, int netKeyIndex, int appKeyIndex, byte[] appKey) {
+            super.appKeyCreated(name, netKeyIndex, appKeyIndex, appKey);
+            Log.d(TAG, "BTMESH appKeyCreated ");
+            meshMachine.transitionTo(MESH_READY);
+            netInfo = btmesh.getNetworkbyID(netKeyIndex);
+            int pub_address = 0xc000 + appKeyIndex * 2;
+            int sub_address = 0xc000 + appKeyIndex * 2 + 1;
+            GroupInfo new_group = new GroupInfo(name, netInfo, appKeyIndex, appKey, pub_address, sub_address);
+            netInfo.addGroup(new_group);
+            btmesh.bindLocalModels(netInfo, new_group);
+            btmesh.saveNetworkDB(netInfo);
+        }
+
+        @Override
+        public void gattWrite(int gattHandle, byte[] send) {
+            super.gattWrite(gattHandle, send);
+            Log.d(TAG, "BTMESH asking gattWrite");
+            if (provisionMachine.getCurrentState() == PROVISION_START) {
+                bleService.enableProvisionOutNotification();
+                bleService.writeProvisionInChar(0, send);
+                provisionMachine.transitionTo(PROVISION_SEND);
+            } else if (proxyMachine.getCurrentState() == PROXY_START) {
+                bleService.enableProvisionOutNotification();
+                bleService.writeProvisionInChar(0, send);
+                proxyMachine.transitionTo(PROXY_SEND);
+            } else if (proxyMachine.getCurrentState() == PROXY_SET) {
+                bleService.writeProvisionInChar(0, send);
+                proxyMachine.transitionTo(PROXY_SET_SEND);
+            }
+        }
+
+        @Override
+        public void didReceiveDCD(byte[] dcd, int status) {
+            super.didReceiveDCD(dcd, status);
+            Log.d(TAG, "BTMESH asking didReceiveDCD" + String.valueOf(status));
+            proxyMachine.transitionTo(PROXY_READY);
+            deviceInfo.setDcd(dcd);
+            netInfo.updateDeviceInfo(deviceInfo);
+            btmesh.saveNetworkDB(netInfo);
+            Log.d(TAG, " Got DCD : " + Converters.getHexValue(dcd));
+        }
+
+        @Override
+        public void gattRequest(int gattHandle) {
+            super.gattRequest(gattHandle);
+            Log.d(TAG, "BTMESH asking gattRequest");
+            connectGatt();
+        }
+
+        @Override
+        public void didExportRequest(Intent shareIntent) {
+            super.didExportRequest(shareIntent);
+            Log.d(TAG, "BTMESH asking didExportRequest");
+        }
+
+        @Override
+        public void didOOBAuthdisplay(byte[] uuid, int input_action, int input_size, byte[] auth_data) {
+            super.didOOBAuthdisplay(uuid, input_action, input_size, auth_data);
+            Log.d(TAG, "BTMESH asking didOOBAuthdisplay");
+        }
+
+        @Override
+        public void didOOBAuthRequest(byte[] uuid, int output_action, int output_size) {
+            super.didOOBAuthRequest(uuid, output_action, output_size);
+            Log.d(TAG, "BTMESH asking didOOBAuthRequest");
+        }
+
+        @Override
+        public void didCompleteConfig(ConfigOperation previous_cfg, ConfigOperation next_cfg) {
+            super.didCompleteConfig(previous_cfg, next_cfg);
+            Log.d(TAG, "BTMESH asking didCompleteConfig");
+            DeviceInfo devInfo = previous_cfg.device();
+            GroupInfo groupInfo = previous_cfg.group();
+            NetworkInfo netInfo = previous_cfg.network();
+            int kind = previous_cfg.kind();
+            int status = previous_cfg.status();
+            if(kind == ConfigOperation.CFG_ENABLE_PROXY ) {
+                if(previous_cfg.convertStatus(status) == mesh_foundation_status_success) {
+                    Log.i(TAG, "Proxy added succesfully");
+                    proxyMachine.transitionTo(PROXY_READY);
+                } else {
+                    Log.e(TAG, "Proxy addition failed");
+                    proxyMachine.transitionTo(PROXY_READY);
+                }
+
+            }
+            switch (previous_cfg.convertStatus(status)) {
+                case mesh_foundation_status_success:
+                    Log.i(TAG, "mesh_foundation_status_success ");
+                    break;
+                case mesh_foundation_status_invalid_publish_params:
+                    Log.e(TAG, "mesh_foundation_status_invalid_publish_params");
+                    break;
+                case mesh_foundation_status_timeout:
+                    Log.e(TAG, "mesh_foundation_status_timeout");
+                    break;
+                default:
+                    break;
+            }
+            btmesh.applyNextCfg();
+//            btmesh.cancelPendingCfgs();
+        }
+
+        @Override
+        public void statusCallback(int model, int device_address, int current_status, int target_status, int remaining_ms) {
+            super.statusCallback(model, device_address, current_status, target_status, remaining_ms);
+            Log.d(TAG, "BTMESH asking statusCallback");
+        }
+
+        @Override
+        public void didSuccessProvision(int meshAddress, byte[] deviceUuid, int status) {
+            super.didSuccessProvision(meshAddress, deviceUuid, status);
+            Log.d(TAG, "BTMESH asking didSuccessProvision" + String.valueOf(status));
+            if (status == 0) { // provison success
+                addDeviceInfo(meshAddress, deviceUuid);
+                provisionMac = null;
+                provisionMachine.transitionTo(PROVISION_INIT);
+                new ConnectProxy(getApplicationContext());
+            }
+        }
+
+        @Override
+        public void disconnectionRequest(int gattHandle) {
+            super.disconnectionRequest(gattHandle);
+            Log.d(TAG, "BTMESH asking disconnectionRequest");
+            bleService.disconnect();
+            btmesh.disconnectGatt(gattHandle);
+            if (provisionMachine.getCurrentState() == PROVISION_WRITE) {
+                provisionMachine.transitionTo(PROVISION_DISCONNECT);
+            }
+        }
+
+        @Override
+        public void networkCreated(String name, int index, byte[] netKey) {
+            super.networkCreated(name, index, netKey);
+            Log.d(TAG, "BTMESH asking networkCreated " + name);
+            NetworkInfo defaultNetwork = new NetworkInfo();
+            defaultNetwork.setName(name);
+            defaultNetwork.setNetwork_key(netKey);
+            defaultNetwork.setNetID(index);
+            btmesh.saveNetworkDB(defaultNetwork);
+//            createDemoGroup(defaultNetwork);
+            HomeFragment homeFragment = (HomeFragment) getSupportFragmentManager().findFragmentByTag(Constants.HOME_TAG);
+            if (homeFragment != null) {
+                homeFragment.onNetworkCreated(defaultNetwork);
+            }
+            meshMachine.transitionTo(MESH_READY);
+        }
+
+        @Override
+        public void stateChanged(int state) {
+            super.stateChanged(state);
+            Log.d(TAG, "BTMESH asking stateChanged " + String.valueOf(state));
+            switch (state) {
+                case BluetoothMesh.INITIALISED:
+                    Log.d(TAG, "Mesh Initialized");
+                    break;
+
+                case BluetoothMesh.DEINITIALISED:
+                    Log.d(TAG, "Mesh Deinitialized");
+                    break;
+            }
+        }
+    };
+
+    @Override
+    public void createNetwork(String name) {
+        if (meshMachine.getCurrentState() == MESH_INIT) {
+            byte[] netKey = BluetoothMesh.randomGenerator(16);
+            Log.d(TAG, netKey.toString());
+            btmesh.createNetwork(name, netKey);
+        } else {
+            Log.e(TAG, "Mesh is already initialized");
+        }
+    }
+
+    @Override
+    public void createGroup(String name) {
+        if (meshMachine.getCurrentState() == MESH_READY) {
+            byte[] appKey = BluetoothMesh.randomGenerator(16);
+            meshMachine.transitionTo(MESH_GROUP_APPKEY);
+            btmesh.createAppkey(name, netInfo, appKey);
+        } else {
+            Log.e(TAG, "Mesh is not ready to create group");
+        }
+    }
+
+    @Override
+    public void readNetInfo() {
+        if (btmesh != null) {
+            NetworkInfo netinfo = btmesh.getNetworkbyID(0);
+            HomeFragment homeFragment = (HomeFragment) getSupportFragmentManager().findFragmentByTag(Constants.HOME_TAG);
+            if (homeFragment != null) {
+                homeFragment.showNetInfo(netInfo);
+            }
+        }
+    }
+
+    @Override
+    public void gotoScannerScreen() {
+        if (needPermissions(getApplicationContext())) {
+            requestPermissions();
+        }
+        if (getBTStatus() & isBTEnabled) {
+            Fragment fragment = new ScannerFragment();
+            String tag = Constants.SCAN_TAG;
+            loadFragment(fragment, tag);
+        } else {
+            askBTSettings();
+        }
+    }
+
+    @Override
+    public void setProxy(DeviceInfo deviceInfo) {
+        if(deviceInfo.dcd().proxySupport()) {
+            proxyMachine.transitionTo(PROXY_SET);
+            btmesh.setProxy(deviceInfo, netInfo, true);
+        }
+    }
+
+    @Override
+    public void setRelay(DeviceInfo deviceInfo) {
+
+    }
+
+    @Override
+    public void startProvision(String mac, String advertisement) {
+        if (meshMachine.getCurrentState() == MESH_READY && provisionMachine.getCurrentState() == PROVISION_INIT) {
+            provisionMac = mac;
+            this.mac = provisionMac;
+            provisionMachine.transitionTo(PROVISION_READY);
+            gattPriority = BluetoothGatt.CONNECTION_PRIORITY_HIGH;
+            NetworkInfo net = btmesh.getNetworkbyID(0);
+            if (net == null) {
+                return;
+            }
+            byte[] advbytes = Base64.decode(advertisement, Base64.NO_WRAP);
+            btmesh.provisionDevice(net, advbytes, 0, 69);
+            provisionMachine.transitionTo(PROVISION_START);
+        } else {
+            Log.e(TAG, "Mesh not ready for provisioning");
+        }
+    }
+
+    @Override
+    public void deleteNetwork() {
+        if (btmesh != null) {
+            btmesh.cleanDB();
+        }
+    }
+
+    @Override
+    public void disableUIinteraction(boolean on) {
+        if (on) {
+            getWindow().setFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE, WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE);
+        } else {
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE);
+        }
+    }
+
+
+    private void addDeviceInfo(int meshAddress, byte[] deviceUuid) {
+        deviceInfo = new DeviceInfo("name", deviceUuid);
+        NetworkInfo netinfo = btmesh.getNetworkbyID(0);
+        deviceInfo.addToNetwork(netinfo, meshAddress);
+        netinfo.addDevice(deviceInfo);
+        btmesh.saveNetworkDB(netinfo);
+
+    }
+
+    public void connectGatt() {
+        isGattPending = true;
+        if (bleService.isConnected()) {
+            bleService.disconnect();
+        } else {
+            bleService.connect(mac, gattPriority);
+        }
+    }
+
+    private ServiceConnection serviceConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            BluetoothLeService.LocalBinder binder = (BluetoothLeService.LocalBinder) service;
+            bleService = binder.getService();
+            isBound = true;
+            if (!bleService.initialize()) {
+                Log.e(TAG, "Unable to initialize Bluetooth");
+            }
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            isBound = false;
+            if (bleService != null) {
+                bleService.disconnect();
+                bleService.close();
+            }
+
+            bleService = null;
+        }
+    };
+
+    private static IntentFilter makeGattUpdateIntentFilter() {
+        final IntentFilter intentFilter = new IntentFilter();
+        intentFilter.addAction(Constants.ACTION_GATT_CONNECTED);
+        intentFilter.addAction(Constants.ACTION_GATT_DISCONNECTED);
+        intentFilter.addAction(Constants.ACTION_GATT_SERVICES_DISCOVERED);
+        intentFilter.addAction(Constants.ACTION_DATA_AVAILABLE);
+        intentFilter.addAction(Constants.ACTION_GATT_SERVICES_ERROR);
+        intentFilter.addAction(Constants.ACTION_MTU_CHANGED);
+        intentFilter.addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED);
+        intentFilter.addAction(Constants.ACTION_CHARACTERISTIC_WRITE);
+        intentFilter.addAction(Constants.ACTION_CHARACTERISTIC_CHANGE);
+        return intentFilter;
+    }
+
+    private BroadcastReceiver gattUpdatesReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            final String action = intent.getAction();
+            if (Constants.ACTION_GATT_CONNECTED.equals(action)) {
+
+            } else if (Constants.ACTION_GATT_DISCONNECTED.equals(action)) {
+                if (btmesh != null) {
+                    btmesh.disconnectGatt(0);
+                }
+            } else if (Constants.ACTION_GATT_SERVICES_DISCOVERED.equals(action)) {
+
+            } else if (Constants.ACTION_DATA_AVAILABLE.equals(action)) {
+                final byte[] data = intent.getByteArrayExtra(Constants.EXTRA_DATA);
+                ParcelUuid uuidExtra = intent.getParcelableExtra(Constants.EXTRA_CHARACTERISTIC);
+                UUID uuid = uuidExtra.getUuid();
+
+            } else if (Constants.ACTION_GATT_SERVICES_ERROR.equals(action)) {
+
+            } else if (Constants.ACTION_MTU_CHANGED.equals(action)) {
+                if (btmesh != null) {
+                    btmesh.connectGatt(0);
+                }
+                if (proxyMachine.getCurrentState() == PROXY_START) {
+                    if (deviceInfo != null) {
+                        btmesh.DCDRequest(deviceInfo);
+                        deviceInfo = null;
+                    }
+                }
+            } else if (Constants.ACTION_CHARACTERISTIC_WRITE.equals(action)) {
+                final byte[] data = intent.getByteArrayExtra(Constants.EXTRA_DATA);
+                ParcelUuid uuidExtra = intent.getParcelableExtra(Constants.EXTRA_CHARACTERISTIC);
+                UUID uuid = uuidExtra.getUuid();
+
+                if (mac.equals(provisionMac)) {
+
+                }
+
+            } else if (Constants.ACTION_CHARACTERISTIC_CHANGE.equals(action)) {
+                final byte[] data = intent.getByteArrayExtra(Constants.EXTRA_DATA);
+                ParcelUuid uuidExtra = intent.getParcelableExtra(Constants.EXTRA_CHARACTERISTIC);
+                UUID uuid = uuidExtra.getUuid();
+                if (uuid.equals(BluetoothMesh.meshUnprovisionedInChar)) {
+                    if (provisionMachine.getCurrentState() == PROVISION_SEND) {
+                        provisionMachine.transitionTo(PROVISION_WRITE);
+                    } else if (proxyMachine.getCurrentState() == PROXY_SEND) {
+                        proxyMachine.transitionTo(PROXY_WRITE);
+                    } else if(proxyMachine.getCurrentState() == PROXY_SET_SEND) {
+                        proxyMachine.transitionTo(PROXY_SET_WRITE);
+                    }
+                    btmesh.write(0, data);
+                } else {
+                    Log.i(TAG, "Unknown charactersistic changed UUID: " + uuid);
+                }
+
+            } else if (BluetoothDevice.ACTION_BOND_STATE_CHANGED.equals(action)) {
+
+            }
+        }
+    };
+
+    private void registerReceivers() {
+        registerReceiver(gattUpdatesReceiver, makeGattUpdateIntentFilter());
+    }
+
+
+    private void unregisterReceivers() {
+        unregisterReceiver(gattUpdatesReceiver);
+    }
 
     private BottomNavigationView.OnNavigationItemSelectedListener mOnNavigationItemSelectedListener
             = new BottomNavigationView.OnNavigationItemSelectedListener() {
@@ -98,42 +551,6 @@ public class MainActivity extends AppCompatActivity implements FragListener {
     };
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-
-        // load the default fragment
-        loadFragment(new HomeFragment(), Constants.HOME_TAG);
-        BottomNavigationView navigation = (BottomNavigationView) findViewById(R.id.navigation);
-        navigation.setOnNavigationItemSelectedListener(mOnNavigationItemSelectedListener);
-
-        if (needPermissions(this)) {
-            requestPermissions();
-        }
-
-        // Create bluetooth mesh
-        btmesh = new BluetoothMesh(getApplicationContext(), btmeshCallback);
-        if (!btmesh.getNetworkDB().isEmpty()) {
-            netInfo = btmesh.getNetworkDB().get(0);
-            Log.d(TAG, "Network DB contains some meshes " + netInfo.name());
-        } else {
-            Log.d(TAG, "No Networks in Network DB");
-        }
-
-        // start LE service
-        Intent intent = new Intent(this, BluetoothLeService.class);
-        bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE);
-        registerReceivers();
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        getBTStatus();
-    }
-
-    @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         switch (requestCode) {
@@ -163,13 +580,6 @@ public class MainActivity extends AppCompatActivity implements FragListener {
         }
     }
 
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        unregisterReceivers();
-    }
-
     private boolean loadFragment(Fragment fragment, String tag) {
         //switching fragment
         if (fragment != null) {
@@ -186,7 +596,6 @@ public class MainActivity extends AppCompatActivity implements FragListener {
         return ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED
                 || ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH) != PackageManager.PERMISSION_GRANTED
                 || ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_ADMIN) != PackageManager.PERMISSION_GRANTED
-                || ActivityCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
                 ;
     }
 
@@ -196,7 +605,6 @@ public class MainActivity extends AppCompatActivity implements FragListener {
                 Manifest.permission.ACCESS_COARSE_LOCATION,
                 Manifest.permission.BLUETOOTH,
                 Manifest.permission.BLUETOOTH_ADMIN,
-                Manifest.permission.WRITE_EXTERNAL_STORAGE
         };
         ActivityCompat.requestPermissions(this, permissions, PERMISSIONS_REQUEST_ALL_PERMISSIONS);
     }
@@ -249,194 +657,6 @@ public class MainActivity extends AppCompatActivity implements FragListener {
         alertDialog.show();
     }
 
-    private final MeshCallback btmeshCallback = new MeshCallback() {
-        @Override
-        public void appKeyCreated(String name, int netKeyIndex, int appKeyIndex, byte[] appKey) {
-            super.appKeyCreated(name, netKeyIndex, appKeyIndex, appKey);
-            Log.d(TAG, "BTMESH appKeyCreated ");
-        }
-
-        @Override
-        public void gattWrite(int gattHandle, byte[] send) {
-            super.gattWrite(gattHandle, send);
-            Log.d(TAG, "BTMESH asking gattWrite");
-            if(mac.equals(provisionMac)) {
-                bleService.writeProvisionInChar(0, send);
-            }
-        }
-
-        @Override
-        public void didReceiveDCD(byte[] dcd, int status) {
-            super.didReceiveDCD(dcd, status);
-            Log.d(TAG, "BTMESH asking didReceiveDCD" + String.valueOf(status));
-        }
-
-        @Override
-        public void gattRequest(int gattHandle) {
-            super.gattRequest(gattHandle);
-            Log.d(TAG, "BTMESH asking gattRequest");
-            connectGatt();
-        }
-
-        @Override
-        public void didExportRequest(Intent shareIntent) {
-            super.didExportRequest(shareIntent);
-            Log.d(TAG, "BTMESH asking didExportRequest");
-        }
-
-        @Override
-        public void didOOBAuthdisplay(byte[] uuid, int input_action, int input_size, byte[] auth_data) {
-            super.didOOBAuthdisplay(uuid, input_action, input_size, auth_data);
-            Log.d(TAG, "BTMESH asking didOOBAuthdisplay");
-        }
-
-        @Override
-        public void didOOBAuthRequest(byte[] uuid, int output_action, int output_size) {
-            super.didOOBAuthRequest(uuid, output_action, output_size);
-            Log.d(TAG, "BTMESH asking didOOBAuthRequest");
-        }
-
-        @Override
-        public void didCompleteConfig(ConfigOperation previous_cfg, ConfigOperation next_cfg) {
-            super.didCompleteConfig(previous_cfg, next_cfg);
-            Log.d(TAG, "BTMESH asking didCompleteConfig");
-        }
-
-        @Override
-        public void statusCallback(int model, int device_address, int current_status, int target_status, int remaining_ms) {
-            super.statusCallback(model, device_address, current_status, target_status, remaining_ms);
-            Log.d(TAG, "BTMESH asking statusCallback");
-        }
-
-        @Override
-        public void didSuccessProvision(int meshAddress, byte[] deviceUuid, int status) {
-            super.didSuccessProvision(meshAddress, deviceUuid, status);
-            Log.d(TAG, "BTMESH asking didSuccessProvision" + String.valueOf(status));
-            if (status == 0) { // provison success
-                addDeviceInfo(meshAddress, deviceUuid);
-                provisionMac = null;
-                new ConnectProxy(getApplicationContext());
-            }
-        }
-
-        @Override
-        public void disconnectionRequest(int gattHandle) {
-            super.disconnectionRequest(gattHandle);
-            Log.d(TAG, "BTMESH asking disconnectionRequest");
-            bleService.disconnect();
-            btmesh.disconnectGatt(gattHandle);
-        }
-
-        @Override
-        public void networkCreated(String name, int index, byte[] netKey) {
-            super.networkCreated(name, index, netKey);
-            Log.d(TAG, "BTMESH asking networkCreated " + name);
-            NetworkInfo defaultNetwork = new NetworkInfo();
-            defaultNetwork.setName(name);
-            defaultNetwork.setNetwork_key(netKey);
-            defaultNetwork.setNetID(index);
-            btmesh.saveNetworkDB(defaultNetwork);
-//            createDemoGroup(defaultNetwork);
-            HomeFragment homeFragment = (HomeFragment) getSupportFragmentManager().findFragmentByTag(Constants.HOME_TAG);
-            if(homeFragment != null) {
-                homeFragment.onNetworkCreated(defaultNetwork);
-            }
-        }
-
-        @Override
-        public void stateChanged(int state) {
-            super.stateChanged(state);
-            Log.d(TAG, "BTMESH asking stateChanged " + String.valueOf(state));
-            switch (state) {
-                case BluetoothMesh.INITIALISED:
-                    Log.d(TAG, "Mesh Initialized");
-                    break;
-
-                case BluetoothMesh.DEINITIALISED:
-                    Log.d(TAG, "Mesh Deinitialized");
-                    break;
-            }
-        }
-    };
-
-    private void addDeviceInfo(int meshAddress, byte[] deviceUuid) {
-        deviceInfo = new DeviceInfo("name", deviceUuid);
-        NetworkInfo netinfo = btmesh.getNetworkbyID(0);
-        deviceInfo.addToNetwork(netinfo, meshAddress);
-        netinfo.addDevice(deviceInfo);
-        btmesh.saveNetworkDB(netinfo);
-
-    }
-
-    public void connectGatt() {
-        isGattPending = true;
-        if(bleService.isConnected()) {
-            bleService.disconnect();
-        } else {
-            bleService.connect(mac, gattPriority);
-        }
-    }
-    @Override
-    public void createNetwork(String name) {
-        if(btmesh != null) {
-            byte[] netKey = Constants.createNetKey();
-            Log.d(TAG, netKey.toString());
-            btmesh.createNetwork(name, netKey);
-        }
-    }
-
-    @Override
-    public void readNetInfo() {
-        if(btmesh != null) {
-            NetworkInfo netinfo = btmesh.getNetworkbyID(0);
-            HomeFragment homeFragment = (HomeFragment) getSupportFragmentManager().findFragmentByTag(Constants.HOME_TAG);
-            if(homeFragment != null) {
-                homeFragment.showNetInfo(netInfo);
-            }
-        }
-    }
-
-    @Override
-    public void gotoScannerScreen() {
-        if (needPermissions(getApplicationContext())) {
-            requestPermissions();
-        }
-        if (getBTStatus() & isBTEnabled) {
-            Fragment fragment = new ScannerFragment();
-            String tag = Constants.SCAN_TAG;
-            loadFragment(fragment, tag);
-        } else {
-            askBTSettings();
-        }
-    }
-
-    @Override
-    public void startProvision(String mac, String advertisement) {
-        if(btmesh != null) {
-            provisionMac = mac;
-            this.mac = provisionMac;
-            gattPriority = BluetoothGatt.CONNECTION_PRIORITY_HIGH;
-            NetworkInfo net = btmesh.getNetworkbyID(0);
-            byte[] advbytes = Base64.decode(advertisement, Base64.NO_WRAP);
-            btmesh.provisionDevice(net, advbytes, 0, 69);
-        }
-    }
-
-    @Override
-    public void deleteNetwork() {
-        if(btmesh != null) {
-            btmesh.cleanDB();
-        }
-    }
-
-    @Override
-    public void disableUIinteraction(boolean on) {
-        if(on) {
-            getWindow().setFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE, WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE);
-        } else {
-            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE);
-        }
-    }
 
     public class ConnectProxy implements ScannerInterface {
         public final String TAG = ScannerFragment.class.getSimpleName();
@@ -492,115 +712,59 @@ public class MainActivity extends AppCompatActivity implements FragListener {
 
                 if (!idMatch && !netMatch) return;
                 proxyMac = result.getDevice().getAddress();
+                if (proxyMachine.getCurrentState() == PROXY_INIT) {
+                    proxyMachine.transitionTo(PROXY_READY);
+                }
                 bleScanner.stopScanning();
                 mac = proxyMac;
                 gattPriority = BluetoothGatt.CONNECTION_PRIORITY_BALANCED;
-                int status = btmesh.initBluetoothMeshProxy(0, 69);
-                if(status != 0) {
-                    Log.e(TAG, "Error white initBluetoothMeshProxy");
-                }
-            }
-        }
-    }
 
-    private ServiceConnection serviceConnection = new ServiceConnection() {
-        @Override
-        public void onServiceConnected(ComponentName name, IBinder service) {
-            BluetoothLeService.LocalBinder binder = (BluetoothLeService.LocalBinder) service;
-            bleService = binder.getService();
-            isBound = true;
-            if (!bleService.initialize()) {
-                Log.e(TAG, "Unable to initialize Bluetooth");
-            }
-        }
-
-        @Override
-        public void onServiceDisconnected(ComponentName name) {
-            isBound = false;
-            if (bleService != null) {
-                bleService.disconnect();
-                bleService.close();
-            }
-
-            bleService = null;
-        }
-    };
-
-    private static IntentFilter makeGattUpdateIntentFilter() {
-        final IntentFilter intentFilter = new IntentFilter();
-        intentFilter.addAction(Constants.ACTION_GATT_CONNECTED);
-        intentFilter.addAction(Constants.ACTION_GATT_DISCONNECTED);
-        intentFilter.addAction(Constants.ACTION_GATT_SERVICES_DISCOVERED);
-        intentFilter.addAction(Constants.ACTION_DATA_AVAILABLE);
-        intentFilter.addAction(Constants.ACTION_GATT_SERVICES_ERROR);
-        intentFilter.addAction(Constants.ACTION_MTU_CHANGED);
-        intentFilter.addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED);
-        intentFilter.addAction(Constants.ACTION_CHARACTERISTIC_WRITE);
-        intentFilter.addAction(Constants.ACTION_CHARACTERISTIC_CHANGE);
-        return intentFilter;
-    }
-
-    private BroadcastReceiver gattUpdatesReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            final String action = intent.getAction();
-            if (Constants.ACTION_GATT_CONNECTED.equals(action)) {
-
-            } else if (Constants.ACTION_GATT_DISCONNECTED.equals(action)) {
-                if(btmesh != null) {
-                    btmesh.disconnectGatt(0);
-                }
-            } else if (Constants.ACTION_GATT_SERVICES_DISCOVERED.equals(action)) {
-
-            } else if (Constants.ACTION_DATA_AVAILABLE.equals(action)) {
-                final byte[] data = intent.getByteArrayExtra(Constants.EXTRA_DATA);
-                ParcelUuid uuidExtra = intent.getParcelableExtra(Constants.EXTRA_CHARACTERISTIC);
-                UUID uuid = uuidExtra.getUuid();
-
-            } else if (Constants.ACTION_GATT_SERVICES_ERROR.equals(action)) {
-
-            } else if (Constants.ACTION_MTU_CHANGED.equals(action)) {
-                if(btmesh != null) {
-                    btmesh.connectGatt(0);
-                }
-                if(mac.equals(provisionMac)) {
-                    bleService.enableProvisionOutNotification();
-                }
-                if(mac.equals(proxyMac)) {
-                    if(deviceInfo != null) {
-                        btmesh.DCDRequest(deviceInfo);
-                        deviceInfo = null;
+                if (proxyMachine.getCurrentState() == PROXY_READY) {
+                    int status = btmesh.initBluetoothMeshProxy(0, 69);
+                    proxyMachine.transitionTo(PROXY_START);
+                    if (status != 0) {
+                        Log.e(TAG, "Error white initBluetoothMeshProxy");
+                        proxyMachine.transitionTo(PROXY_READY);
                     }
                 }
-            } else if (Constants.ACTION_CHARACTERISTIC_WRITE.equals(action)) {
-                final byte[] data = intent.getByteArrayExtra(Constants.EXTRA_DATA);
-                ParcelUuid uuidExtra = intent.getParcelableExtra(Constants.EXTRA_CHARACTERISTIC);
-                UUID uuid = uuidExtra.getUuid();
-
-                if(mac.equals(provisionMac)) {
-
-                }
-
-            } else if(Constants.ACTION_CHARACTERISTIC_CHANGE.equals(action)) {
-                final byte[] data = intent.getByteArrayExtra(Constants.EXTRA_DATA);
-                ParcelUuid uuidExtra = intent.getParcelableExtra(Constants.EXTRA_CHARACTERISTIC);
-                UUID uuid = uuidExtra.getUuid();
-                if(uuid.equals(BluetoothMesh.meshUnprovisionedInChar)) {
-                    btmesh.write(0, data);
-                }
-            }else if (BluetoothDevice.ACTION_BOND_STATE_CHANGED.equals(action)) {
-
             }
         }
-    };
-
-    private void registerReceivers() {
-        registerReceiver(gattUpdatesReceiver, makeGattUpdateIntentFilter());
     }
 
+    public class MeshHandler {
 
-    private void unregisterReceivers() {
-        unregisterReceiver(gattUpdatesReceiver);
+        @StateHandler(state = MESH_INIT)
+        public void onEventMeshInit(String event, TinyMachine tm) {
+            if ("INIT".equals(event)) {
+                // Create bluetooth mesh
+                btmesh = new BluetoothMesh(getApplicationContext(), btmeshCallback);
+                tm.fireEvent("LOAD");
+            }
+            if ("LOAD".equals(event)) {
+                if (!btmesh.getNetworkDB().isEmpty()) {
+                    netInfo = btmesh.getNetworkDB().get(0);
+                    Log.d(TAG, "Network DB contains some meshes " + netInfo.name());
+                    tm.transitionTo(MESH_READY);
+                } else {
+                    Log.d(TAG, "No Networks in Network DB");
+                }
+            }
+        }
     }
 
+    public static class ProvisionHandler {
+
+        @StateHandler(state = Constants.PROVISION_READY)
+        public void onProvisionStart(String event, TinyMachine tm) {
+
+        }
+    }
+
+    public static class ProxyHandler {
+
+        @StateHandler(state = Constants.PROXY_INIT)
+        public void onProxyStart(String event, TinyMachine tm) {
+
+        }
+    }
 }

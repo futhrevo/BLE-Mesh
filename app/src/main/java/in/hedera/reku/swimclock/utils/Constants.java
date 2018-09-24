@@ -1,7 +1,5 @@
 package in.hedera.reku.swimclock.utils;
 
-import java.security.SecureRandom;
-
 public class Constants {
     public static final String HOME_TAG = "HOME";
     public static final String SCAN_TAG = "SCAN";
@@ -24,19 +22,25 @@ public class Constants {
     public static final String ACTION_CHARACTERISTIC_WRITE = "in.hedera.reku.swimclock.ACTION_CHARACTERISTIC_WRITE";
     public static final String ACTION_CHARACTERISTIC_CHANGE = "in.hedera.reku.swimclock.ACTION_CHARACTERISTIC_CHANGE";
 
-    // byte[] with size 16
-    public static byte[] createNetKey() {
-        byte[] randomKey = new byte[16];
-        SecureRandom random = new SecureRandom();
-        random.nextBytes(randomKey);
-        return randomKey;
-    }
+    public static final int MESH_INIT = 100;
+    public static final int MESH_READY = 101;
+    public static final int MESH_GROUP_APPKEY = 102;
 
-    public static byte[] createAppKey() {
-        byte[] randomKey = new byte[16];
-        SecureRandom random = new SecureRandom();
-        random.nextBytes(randomKey);
-        return randomKey;
-    }
+    public static final int PROXY_INIT = 200;
+    public static final int PROXY_READY = 201;
+    public static final int PROXY_START = 202;
+    public static final int PROXY_SEND = 203;
+    public static final int PROXY_WRITE = 204;
+    public static final int PROXY_DCD = 205;
+    public static final int PROXY_SET = 206;
+    public static final int PROXY_SET_SEND = 216;
+    public static final int  PROXY_SET_WRITE = 226;
+
+    public static final int PROVISION_INIT = 300;
+    public static final int PROVISION_START = 301;
+    public static final int PROVISION_SEND = 302;
+    public static final int PROVISION_WRITE = 303;
+    public static final int PROVISION_DISCONNECT = 304;
+    public static final int PROVISION_READY = 305;
 
 }
