@@ -29,8 +29,10 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.silabs.bluetooth_mesh.BluetoothMesh;
+import com.silabs.bluetooth_mesh.Utils.Converters;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import in.hedera.reku.swimclock.FragListener;
@@ -189,7 +191,20 @@ public class ScannerFragment extends Fragment implements ScannerInterface {
     }
     @Override
     public void scanResult(ScanResult result) {
-        NPDevice npDevice = new NPDevice(result.getDevice(), result.getRssi(), result.getScanRecord().getBytes());
+        ParcelUuid meshServ = ParcelUuid.fromString(BluetoothMesh.meshUnprovisionedService.toString());
+        byte[] readuuid = result.getScanRecord().getServiceData(meshServ);
+//        Log.i(TAG, "received byte array of length : " + readuuid.length);
+//        Log.i(TAG, "Device Read UUID: " + Converters.getHexValue(readuuid));
+//        if (result.getScanRecord() != null && result.getScanRecord().getServiceUuids() != null && result.getScanRecord().getServiceUuids().contains(meshUnprovServ)) {
+//
+//        }
+//        List<ParcelUuid>  UUIDs= result.getScanRecord().getServiceUuids();
+//        UUID device = UUID.nameUUIDFromBytes(result.getScanRecord().getBytes());
+//        byte[] uuid = Constants.getBytesFromUUID(device);
+        byte[] uuid = Arrays.copyOfRange(readuuid, 0, 16);
+//        Log.i(TAG, "Length of uuid : " + uuid.length);
+        Log.i(TAG, "Device UUID: " + Converters.getHexValue(uuid));
+        NPDevice npDevice = new NPDevice(result.getDevice(), result.getRssi(), uuid);
         npdViewModel.insert(npDevice);
     }
 
@@ -220,7 +235,7 @@ public class ScannerFragment extends Fragment implements ScannerInterface {
             ParcelUuid meshServ = ParcelUuid.fromString(BluetoothMesh.meshUnprovisionedService.toString());
             ScanFilter filter = new ScanFilter.Builder().setServiceUuid(meshServ).build();
             // TODO: Enable this line when testing with mesh devices
-//          filters.add(filter);
+          filters.add(filter);
             bleScanner.startScanning(this, Constants.SCAN_TIMEOUT, filters);
         } else {
             bleScanner.stopScanning();
