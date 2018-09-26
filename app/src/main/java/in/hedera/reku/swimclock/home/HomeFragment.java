@@ -99,9 +99,9 @@ public class HomeFragment extends Fragment {
     }
 
     @Override
-    public void onDetach() {
+    public void onDestroyView() {
         callback = null;
-        super.onDetach();
+        super.onDestroyView();
     }
 
     @Override
@@ -160,6 +160,7 @@ public class HomeFragment extends Fragment {
     }
 
     private void showProgressBar(boolean show) {
+        if(callback == null) return;
         if (show) {
             progressBar.setVisibility(View.VISIBLE);
             callback.disableUIinteraction(true);

@@ -192,6 +192,10 @@ public class ScannerFragment extends Fragment implements ScannerInterface {
     @Override
     public void scanResult(ScanResult result) {
         ParcelUuid meshServ = ParcelUuid.fromString(BluetoothMesh.meshUnprovisionedService.toString());
+        if (result.getScanRecord() == null || result.getScanRecord().getServiceData(meshServ) == null) {
+            Log.i(TAG, "No Service data for mesh provisioning service on " + result.getDevice().getAddress());
+            return;
+        }
         byte[] readuuid = result.getScanRecord().getServiceData(meshServ);
 //        Log.i(TAG, "received byte array of length : " + readuuid.length);
 //        Log.i(TAG, "Device Read UUID: " + Converters.getHexValue(readuuid));
@@ -201,6 +205,10 @@ public class ScannerFragment extends Fragment implements ScannerInterface {
 //        List<ParcelUuid>  UUIDs= result.getScanRecord().getServiceUuids();
 //        UUID device = UUID.nameUUIDFromBytes(result.getScanRecord().getBytes());
 //        byte[] uuid = Constants.getBytesFromUUID(device);
+        if(readuuid == null) {
+            Log.i(TAG, "Service data empty for mesh provisioning service on " + result.getDevice().getAddress());
+            return;
+        }
         byte[] uuid = Arrays.copyOfRange(readuuid, 0, 16);
 //        Log.i(TAG, "Length of uuid : " + uuid.length);
         Log.i(TAG, "Device UUID: " + Converters.getHexValue(uuid));

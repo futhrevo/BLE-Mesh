@@ -21,6 +21,7 @@ import android.os.IBinder;
 import android.os.ParcelUuid;
 import android.support.annotation.NonNull;
 import android.support.design.widget.BottomNavigationView;
+import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.Fragment;
 import android.support.v7.app.AlertDialog;
@@ -91,6 +92,7 @@ public class MainActivity extends AppCompatActivity implements FragListener {
     private TinyMachine meshMachine;
     private TinyMachine provisionMachine;
     private TinyMachine proxyMachine;
+    private Snackbar snackbar;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -98,6 +100,7 @@ public class MainActivity extends AppCompatActivity implements FragListener {
         setContentView(R.layout.activity_main);
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
 
+        snackbar = Snackbar.make(findViewById(R.id.container), "Test Snack", Snackbar.LENGTH_SHORT);
         // load the default fragment
         loadFragment(new HomeFragment(), Constants.HOME_TAG);
         BottomNavigationView navigation = (BottomNavigationView) findViewById(R.id.navigation);
@@ -133,7 +136,7 @@ public class MainActivity extends AppCompatActivity implements FragListener {
     private final MeshCallback btmeshCallback = new MeshCallback() {
         @Override
         public void appKeyCreated(String name, int netKeyIndex, int appKeyIndex, byte[] appKey) {
-//            super.appKeyCreated(name, netKeyIndex, appKeyIndex, appKey);
+            super.appKeyCreated(name, netKeyIndex, appKeyIndex, appKey);
             Log.d(TAG, "BTMESH appKeyCreated ");
             meshMachine.transitionTo(MESH_READY);
             netInfo = btmesh.getNetworkbyID(netKeyIndex);
@@ -147,7 +150,7 @@ public class MainActivity extends AppCompatActivity implements FragListener {
 
         @Override
         public void gattWrite(int gattHandle, byte[] send) {
-//            super.gattWrite(gattHandle, send);
+            super.gattWrite(gattHandle, send);
             Log.d(TAG, "BTMESH asking gattWrite");
             if (provisionMachine.getCurrentState() == PROVISION_START) {
                 bleService.enableProvisionOutNotification();
@@ -165,7 +168,7 @@ public class MainActivity extends AppCompatActivity implements FragListener {
 
         @Override
         public void didReceiveDCD(byte[] dcd, int status) {
-//            super.didReceiveDCD(dcd, status);
+            super.didReceiveDCD(dcd, status);
             Log.d(TAG, "BTMESH asking didReceiveDCD" + String.valueOf(status));
             proxyMachine.transitionTo(PROXY_READY);
             deviceInfo.setDcd(dcd);
@@ -176,32 +179,32 @@ public class MainActivity extends AppCompatActivity implements FragListener {
 
         @Override
         public void gattRequest(int gattHandle) {
-//            super.gattRequest(gattHandle);
+            super.gattRequest(gattHandle);
             Log.d(TAG, "BTMESH asking gattRequest");
             connectGatt();
         }
 
         @Override
         public void didExportRequest(Intent shareIntent) {
-//            super.didExportRequest(shareIntent);
+            super.didExportRequest(shareIntent);
             Log.d(TAG, "BTMESH asking didExportRequest");
         }
 
         @Override
         public void didOOBAuthdisplay(byte[] uuid, int input_action, int input_size, byte[] auth_data) {
-//            super.didOOBAuthdisplay(uuid, input_action, input_size, auth_data);
+            super.didOOBAuthdisplay(uuid, input_action, input_size, auth_data);
             Log.d(TAG, "BTMESH asking didOOBAuthdisplay");
         }
 
         @Override
         public void didOOBAuthRequest(byte[] uuid, int output_action, int output_size) {
-//            super.didOOBAuthRequest(uuid, output_action, output_size);
+            super.didOOBAuthRequest(uuid, output_action, output_size);
             Log.d(TAG, "BTMESH asking didOOBAuthRequest");
         }
 
         @Override
         public void didCompleteConfig(ConfigOperation previous_cfg, ConfigOperation next_cfg) {
-//            super.didCompleteConfig(previous_cfg, next_cfg);
+            super.didCompleteConfig(previous_cfg, next_cfg);
             Log.d(TAG, "BTMESH asking didCompleteConfig");
             DeviceInfo devInfo = previous_cfg.device();
             GroupInfo groupInfo = previous_cfg.group();
@@ -237,13 +240,13 @@ public class MainActivity extends AppCompatActivity implements FragListener {
 
         @Override
         public void statusCallback(int model, int device_address, int current_status, int target_status, int remaining_ms) {
-//            super.statusCallback(model, device_address, current_status, target_status, remaining_ms);
+            super.statusCallback(model, device_address, current_status, target_status, remaining_ms);
             Log.d(TAG, "BTMESH asking statusCallback");
         }
 
         @Override
         public void didSuccessProvision(int meshAddress, byte[] deviceUuid, int status) {
-//            super.didSuccessProvision(meshAddress, deviceUuid, status);
+            super.didSuccessProvision(meshAddress, deviceUuid, status);
             Log.d(TAG, "BTMESH asking didSuccessProvision" + String.valueOf(status));
             if (status == 0) { // provison success
                 addDeviceInfo(meshAddress, deviceUuid);
@@ -255,7 +258,7 @@ public class MainActivity extends AppCompatActivity implements FragListener {
 
         @Override
         public void disconnectionRequest(int gattHandle) {
-//            super.disconnectionRequest(gattHandle);
+            super.disconnectionRequest(gattHandle);
             Log.d(TAG, "BTMESH asking disconnectionRequest");
             bleService.disconnect();
             btmesh.disconnectGatt(gattHandle);
@@ -267,18 +270,19 @@ public class MainActivity extends AppCompatActivity implements FragListener {
         @Override
         public void networkCreated(String name, int index, byte[] netKey) {
 //            super.networkCreated(name, index, netKey);
-            Log.d(TAG, "BTMESH asking networkCreated " + name);
-            NetworkInfo defaultNetwork = new NetworkInfo();
-            defaultNetwork.setName(name);
-            defaultNetwork.setNetwork_key(netKey);
-            defaultNetwork.setNetID(index);
-            btmesh.saveNetworkDB(defaultNetwork);
+            Log.d(TAG, "BTMESH asking networkCreated " + name + String.valueOf(index));
+            netInfo = new NetworkInfo();
+            netInfo.setName(name);
+            netInfo.setNetwork_key(netKey);
+            netInfo.setNetID(index);
+            btmesh.saveNetworkDB(netInfo);
 //            createDemoGroup(defaultNetwork);
             HomeFragment homeFragment = (HomeFragment) getSupportFragmentManager().findFragmentByTag(Constants.HOME_TAG);
             if (homeFragment != null) {
-                homeFragment.onNetworkCreated(defaultNetwork);
+                homeFragment.onNetworkCreated(netInfo);
             }
             meshMachine.transitionTo(MESH_READY);
+            createGroup("Default");
         }
 
         @Override
@@ -369,6 +373,7 @@ public class MainActivity extends AppCompatActivity implements FragListener {
                 return;
             }
             byte[] advbytes = Base64.decode(advertisement, Base64.NO_WRAP);
+
             btmesh.provisionDevice(net, advbytes, 0, 69);
             provisionMachine.transitionTo(PROVISION_START);
         } else {
@@ -768,3 +773,7 @@ public class MainActivity extends AppCompatActivity implements FragListener {
         }
     }
 }
+
+// 59F49C07-FF45-49A7-A755-A3943AAB45DE
+// 53696c61-6273-4465-762d-112def570b00
+// 00001827-0000-1000-8000-00805f9b34fb
