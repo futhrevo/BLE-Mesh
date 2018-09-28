@@ -17,6 +17,7 @@ import android.content.ServiceConnection;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
 import android.os.ParcelUuid;
 import android.support.annotation.NonNull;
@@ -57,12 +58,14 @@ import static com.silabs.bluetooth_mesh.ConfigOperation.Status.mesh_foundation_s
 import static in.hedera.reku.swimclock.utils.Constants.MESH_GROUP_APPKEY;
 import static in.hedera.reku.swimclock.utils.Constants.MESH_INIT;
 import static in.hedera.reku.swimclock.utils.Constants.MESH_READY;
+import static in.hedera.reku.swimclock.utils.Constants.PROVISION_CONNECT;
 import static in.hedera.reku.swimclock.utils.Constants.PROVISION_DISCONNECT;
 import static in.hedera.reku.swimclock.utils.Constants.PROVISION_INIT;
-import static in.hedera.reku.swimclock.utils.Constants.PROVISION_READY;
 import static in.hedera.reku.swimclock.utils.Constants.PROVISION_SEND;
 import static in.hedera.reku.swimclock.utils.Constants.PROVISION_START;
 import static in.hedera.reku.swimclock.utils.Constants.PROVISION_WRITE;
+import static in.hedera.reku.swimclock.utils.Constants.PROXY_DCD;
+import static in.hedera.reku.swimclock.utils.Constants.PROXY_DCD_WRITE_SEND;
 import static in.hedera.reku.swimclock.utils.Constants.PROXY_INIT;
 import static in.hedera.reku.swimclock.utils.Constants.PROXY_READY;
 import static in.hedera.reku.swimclock.utils.Constants.PROXY_SEND;
@@ -77,13 +80,11 @@ public class MainActivity extends AppCompatActivity implements FragListener {
 
     private static final int PERMISSIONS_REQUEST_ALL_PERMISSIONS = 101;
     private final Object mConnectionLock = new Object(); // Lock variable
+    final Handler handler = new Handler();
     public boolean isBTEnabled;
     private BluetoothMesh btmesh;
     private BluetoothLeService bleService;
     private boolean isBound = false;
-    private String provisionMac;
-    private String proxyMac;
-    private String mac;
     private boolean isGattPending = false;
     private int gattPriority = BluetoothGatt.CONNECTION_PRIORITY_BALANCED;
     private NetworkInfo netInfo;
@@ -93,6 +94,8 @@ public class MainActivity extends AppCompatActivity implements FragListener {
     private TinyMachine provisionMachine;
     private TinyMachine proxyMachine;
     private Snackbar snackbar;
+    private UnProvDevice unProvDevice;
+    private ProxyDevice proxyDevice;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -151,15 +154,14 @@ public class MainActivity extends AppCompatActivity implements FragListener {
         @Override
         public void gattWrite(int gattHandle, byte[] send) {
             super.gattWrite(gattHandle, send);
-            Log.d(TAG, "BTMESH asking gattWrite");
+            Log.d(TAG, "BTMESH asking gattWrite gattHandle: " + gattHandle + " data : " + Converters.getHexValue(send) + " length = " + send.length);
+            bleService.writeProvisionInChar(gattHandle, send);
             if (provisionMachine.getCurrentState() == PROVISION_START) {
-                bleService.enableProvisionOutNotification();
-                bleService.writeProvisionInChar(0, send);
+
                 provisionMachine.transitionTo(PROVISION_SEND);
-            } else if (proxyMachine.getCurrentState() == PROXY_START) {
-                bleService.enableProvisionOutNotification();
+            } else if (proxyMachine.getCurrentState() == PROXY_DCD) {
                 bleService.writeProvisionInChar(0, send);
-                proxyMachine.transitionTo(PROXY_SEND);
+                proxyMachine.transitionTo(PROXY_DCD_WRITE_SEND);
             } else if (proxyMachine.getCurrentState() == PROXY_SET) {
                 bleService.writeProvisionInChar(0, send);
                 proxyMachine.transitionTo(PROXY_SET_SEND);
@@ -180,8 +182,18 @@ public class MainActivity extends AppCompatActivity implements FragListener {
         @Override
         public void gattRequest(int gattHandle) {
             super.gattRequest(gattHandle);
-            Log.d(TAG, "BTMESH asking gattRequest");
-            connectGatt();
+            Log.d(TAG, "BTMESH asking gattRequest handle: " + String.valueOf(gattHandle));
+            if(bleService.isConnected()) {
+                if(gattHandle == bleService.gattHandle) {
+                    Log.d(TAG, "APP replied with connectGatt with handle: " + gattHandle);
+                    btmesh.connectGatt(gattHandle);
+                }
+            }
+//                if (deviceInfo != null) {
+//                    btmesh.DCDRequest(deviceInfo);
+//                    proxyMachine.transitionTo(PROXY_DCD);
+//                    deviceInfo = null;
+//                }
         }
 
         @Override
@@ -250,8 +262,15 @@ public class MainActivity extends AppCompatActivity implements FragListener {
             Log.d(TAG, "BTMESH asking didSuccessProvision" + String.valueOf(status));
             if (status == 0) { // provison success
                 addDeviceInfo(meshAddress, deviceUuid);
-                provisionMac = null;
-                new ConnectProxy(getApplicationContext());
+                proxyDevice = new ProxyDevice(unProvDevice.getmac());
+                unProvDevice = null;
+                handler.postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        new ConnectProxy(getApplicationContext());
+                    }
+                }, 2000);
+
             }
             provisionMachine.transitionTo(PROVISION_INIT);
         }
@@ -262,7 +281,7 @@ public class MainActivity extends AppCompatActivity implements FragListener {
             Log.d(TAG, "BTMESH asking disconnectionRequest");
             bleService.disconnect();
             btmesh.disconnectGatt(gattHandle);
-            if (provisionMachine.getCurrentState() == PROVISION_WRITE) {
+            if (provisionMachine.getCurrentState() > PROVISION_INIT) {
                 provisionMachine.transitionTo(PROVISION_DISCONNECT);
             }
         }
@@ -363,19 +382,10 @@ public class MainActivity extends AppCompatActivity implements FragListener {
 
     @Override
     public void startProvision(String mac, String advertisement) {
+        unProvDevice = new UnProvDevice(mac, advertisement);
         if (meshMachine.getCurrentState() == MESH_READY && provisionMachine.getCurrentState() == PROVISION_INIT) {
-            provisionMac = mac;
-            this.mac = provisionMac;
-            provisionMachine.transitionTo(PROVISION_READY);
-            gattPriority = BluetoothGatt.CONNECTION_PRIORITY_HIGH;
-            NetworkInfo net = btmesh.getNetworkbyID(0);
-            if (net == null) {
-                return;
-            }
-            byte[] advbytes = Base64.decode(advertisement, Base64.NO_WRAP);
-
-            btmesh.provisionDevice(net, advbytes, 0, 69);
-            provisionMachine.transitionTo(PROVISION_START);
+            provisionMachine.transitionTo(PROVISION_CONNECT);
+            connectGatt(1);
         } else {
             Log.e(TAG, "Mesh not ready for provisioning");
         }
@@ -407,12 +417,22 @@ public class MainActivity extends AppCompatActivity implements FragListener {
 
     }
 
-    public void connectGatt() {
-        isGattPending = true;
+    public void connectGatt(int gattHandle) {
         if (bleService.isConnected()) {
             bleService.disconnect();
-        } else {
-            bleService.connect(mac, gattPriority);
+            isGattPending = true;
+            return;
+        }
+        isGattPending = false;
+        if(gattHandle == 1 && unProvDevice != null) {
+            gattPriority = BluetoothGatt.CONNECTION_PRIORITY_HIGH;
+            bleService.connect(unProvDevice.getmac(), gattPriority, gattHandle);
+            return;
+        }
+        if(gattHandle == 0 && proxyDevice != null ) {
+            gattPriority = BluetoothGatt.CONNECTION_PRIORITY_BALANCED;
+            bleService.connect(proxyDevice.getMac(), gattPriority, 0);
+            return;
         }
     }
 
@@ -457,12 +477,25 @@ public class MainActivity extends AppCompatActivity implements FragListener {
         @Override
         public void onReceive(Context context, Intent intent) {
             final String action = intent.getAction();
+            int handle = intent.getIntExtra(Constants.ACTION_GATT_HANDLE, -1);
             if (Constants.ACTION_GATT_CONNECTED.equals(action)) {
 
             } else if (Constants.ACTION_GATT_DISCONNECTED.equals(action)) {
-                if (btmesh != null) {
-                    btmesh.disconnectGatt(0);
+                if(isGattPending) {
+                    // if provisioning is pending
+                    if(provisionMachine.getCurrentState() == Constants.PROVISION_CONNECT && unProvDevice != null) {
+                        connectGatt(1);
+                        return;
+                    }
+                    if(proxyMachine.getCurrentState() == Constants.PROXY_CONNECT && proxyDevice != null) {
+                        connectGatt(0);
+                        return;
+                    }
                 }
+                if (btmesh != null) {
+                    btmesh.disconnectGatt(handle);
+                }
+
             } else if (Constants.ACTION_GATT_SERVICES_DISCOVERED.equals(action)) {
 
             } else if (Constants.ACTION_DATA_AVAILABLE.equals(action)) {
@@ -473,29 +506,28 @@ public class MainActivity extends AppCompatActivity implements FragListener {
             } else if (Constants.ACTION_GATT_SERVICES_ERROR.equals(action)) {
 
             } else if (Constants.ACTION_MTU_CHANGED.equals(action)) {
-                if (btmesh != null) {
-                    btmesh.connectGatt(0);
+                // provision is pending
+                if(provisionMachine.getCurrentState() == Constants.PROVISION_CONNECT) {
+                    provisionMachine.transitionTo(Constants.PROVISION_READY);
+                    provisionMachine.fireEvent(Constants.EVENT_CONNECT);
                 }
-                if (proxyMachine.getCurrentState() == PROXY_START) {
-                    if (deviceInfo != null) {
-                        btmesh.DCDRequest(deviceInfo);
-                        deviceInfo = null;
+                if (proxyMachine.getCurrentState() == Constants.PROXY_CONNECT) {
+                    int status = btmesh.initBluetoothMeshProxy(0, 69);
+                    proxyMachine.transitionTo(PROXY_START);
+                    if (status != 0) {
+                        Log.e(TAG, "Error white initBluetoothMeshProxy");
+                        proxyMachine.transitionTo(PROXY_READY);
                     }
                 }
             } else if (Constants.ACTION_CHARACTERISTIC_WRITE.equals(action)) {
                 final byte[] data = intent.getByteArrayExtra(Constants.EXTRA_DATA);
                 ParcelUuid uuidExtra = intent.getParcelableExtra(Constants.EXTRA_CHARACTERISTIC);
                 UUID uuid = uuidExtra.getUuid();
-
-                if (mac.equals(provisionMac)) {
-
-                }
-
             } else if (Constants.ACTION_CHARACTERISTIC_CHANGE.equals(action)) {
                 final byte[] data = intent.getByteArrayExtra(Constants.EXTRA_DATA);
                 ParcelUuid uuidExtra = intent.getParcelableExtra(Constants.EXTRA_CHARACTERISTIC);
                 UUID uuid = uuidExtra.getUuid();
-                if (uuid.equals(BluetoothMesh.meshUnprovisionedInChar)) {
+                if (uuid.equals(BluetoothMesh.meshUnprovisionedOutChar)) {
                     if (provisionMachine.getCurrentState() == PROVISION_SEND) {
                         provisionMachine.transitionTo(PROVISION_WRITE);
                     } else if (proxyMachine.getCurrentState() == PROXY_SEND) {
@@ -503,7 +535,7 @@ public class MainActivity extends AppCompatActivity implements FragListener {
                     } else if(proxyMachine.getCurrentState() == PROXY_SET_SEND) {
                         proxyMachine.transitionTo(PROXY_SET_WRITE);
                     }
-                    btmesh.write(0, data);
+                    btmesh.write(handle, data);
                 } else {
                     Log.i(TAG, "Unknown charactersistic changed UUID: " + uuid);
                 }
@@ -716,22 +748,12 @@ public class MainActivity extends AppCompatActivity implements FragListener {
                 }
 
                 if (!idMatch && !netMatch) return;
-                proxyMac = result.getDevice().getAddress();
                 if (proxyMachine.getCurrentState() == PROXY_INIT) {
                     proxyMachine.transitionTo(PROXY_READY);
                 }
                 bleScanner.stopScanning();
-                mac = proxyMac;
-                gattPriority = BluetoothGatt.CONNECTION_PRIORITY_BALANCED;
-
-                if (proxyMachine.getCurrentState() == PROXY_READY) {
-                    int status = btmesh.initBluetoothMeshProxy(0, 69);
-                    proxyMachine.transitionTo(PROXY_START);
-                    if (status != 0) {
-                        Log.e(TAG, "Error white initBluetoothMeshProxy");
-                        proxyMachine.transitionTo(PROXY_READY);
-                    }
-                }
+                proxyMachine.transitionTo(Constants.PROXY_CONNECT);
+                connectGatt(0);
             }
         }
     }
@@ -757,11 +779,18 @@ public class MainActivity extends AppCompatActivity implements FragListener {
         }
     }
 
-    public static class ProvisionHandler {
+    public class ProvisionHandler {
 
         @StateHandler(state = Constants.PROVISION_READY)
         public void onProvisionStart(String event, TinyMachine tm) {
-
+            if(Constants.EVENT_CONNECT.equals(event)) {
+                NetworkInfo net = btmesh.getNetworkbyID(0);
+                if (net == null && unProvDevice == null) {
+                    return;
+                }
+                btmesh.provisionDevice(net, unProvDevice.getAdvertisement(), 1, 69);
+                provisionMachine.transitionTo(PROVISION_START);
+            }
         }
     }
 
@@ -770,6 +799,36 @@ public class MainActivity extends AppCompatActivity implements FragListener {
         @StateHandler(state = Constants.PROXY_INIT)
         public void onProxyStart(String event, TinyMachine tm) {
 
+        }
+    }
+
+    public class UnProvDevice {
+        String npmac;
+        String npadv;
+
+        public UnProvDevice(String npmac, String npadv) {
+            this.npadv = npadv;
+            this.npmac = npmac;
+        }
+
+        String getmac() {
+            return npmac;
+        }
+
+        byte[] getAdvertisement() {
+            return Base64.decode(npadv, Base64.NO_WRAP);
+        }
+    }
+
+    public class ProxyDevice {
+        String pmac;
+
+        public ProxyDevice(String pmac) {
+            this.pmac = pmac;
+        }
+
+        String getMac() {
+            return pmac;
         }
     }
 }

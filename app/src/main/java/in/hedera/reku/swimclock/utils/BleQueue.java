@@ -14,13 +14,8 @@ import java.util.Queue;
  */
 
 public class BleQueue {
-    enum ActionType {
-        writeDescriptor, readCharacteristic, writeCharacteristic, connectionPriority, requestMtu
-    }
-
     private Queue<Action> bleQueue = new LinkedList<Action>();
     private BluetoothGatt mBluetoothGatt;
-
     public BleQueue(BluetoothGatt bluetoothGatt) {
         this.mBluetoothGatt = bluetoothGatt;
     }
@@ -33,11 +28,13 @@ public class BleQueue {
                                   BluetoothGattDescriptor descriptor, int status) {
         bleQueue.remove();
         nextAction();
-    };
+    }
 
     public void readCharacteristic(BluetoothGattCharacteristic characteristic) {
         addAction(ActionType.readCharacteristic, characteristic);
     }
+
+    ;
 
     public void onCharacteristicRead(BluetoothGatt gatt,
                                      BluetoothGattCharacteristic characteristic, int status) {
@@ -67,6 +64,7 @@ public class BleQueue {
     public void requestConnectionPriority(int priority) {
         addAction(ActionType.connectionPriority, priority);
     }
+
     private void addAction(ActionType actionType, Object object) {
         bleQueue.add(new Action(actionType, object));
         // if there is only 1 item in the queue, then process it. If more than
@@ -84,9 +82,11 @@ public class BleQueue {
             mBluetoothGatt.writeDescriptor((BluetoothGattDescriptor) action
                     .getObject());
         } else if (ActionType.writeCharacteristic.equals(action.getType())) {
-            mBluetoothGatt
-                    .writeCharacteristic((BluetoothGattCharacteristic) action
-                            .getObject());
+            do {
+
+            }  while(! mBluetoothGatt.writeCharacteristic((BluetoothGattCharacteristic) action.getObject()));
+            return;
+
         } else if (ActionType.readCharacteristic.equals(action.getType())) {
             mBluetoothGatt
                     .readCharacteristic((BluetoothGattCharacteristic) action
@@ -97,10 +97,13 @@ public class BleQueue {
             nextAction();
         } else if (ActionType.requestMtu.equals(action.getType())) {
             mBluetoothGatt.requestMtu((int) action.getObject());
-        }
-        else {
+        } else {
             Log.e("BLEQueue", "Undefined Action found");
         }
+    }
+
+    enum ActionType {
+        writeDescriptor, readCharacteristic, writeCharacteristic, connectionPriority, requestMtu
     }
 
     public class Action {
