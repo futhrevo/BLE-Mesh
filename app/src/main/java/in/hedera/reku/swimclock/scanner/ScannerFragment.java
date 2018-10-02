@@ -29,6 +29,8 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.silabs.bluetooth_mesh.BluetoothMesh;
+import com.silabs.bluetooth_mesh.DeviceInfo;
+import com.silabs.bluetooth_mesh.NetworkInfo;
 import com.silabs.bluetooth_mesh.Utils.Converters;
 
 import java.util.ArrayList;
@@ -137,6 +139,7 @@ public class ScannerFragment extends Fragment implements ScannerInterface {
             }
         });
         Log.d(TAG, "oncreateview");
+        callback.readNetInfo(this);
         return view;
     }
 
@@ -248,7 +251,12 @@ public class ScannerFragment extends Fragment implements ScannerInterface {
         } else {
             bleScanner.stopScanning();
         }
+    }
 
+    public void showNetInfo(NetworkInfo netInfo) {
+        for (DeviceInfo devInfo : netInfo.devicesInfo()) {
+
+        }
     }
 
     public class RecyclerTouchListener implements RecyclerView.OnItemTouchListener {

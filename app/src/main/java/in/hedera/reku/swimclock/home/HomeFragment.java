@@ -94,7 +94,7 @@ public class HomeFragment extends Fragment {
                 callback.gotoScannerScreen();
             }
         });
-        callback.readNetInfo();
+        callback.readNetInfo(this);
         return view;
     }
 

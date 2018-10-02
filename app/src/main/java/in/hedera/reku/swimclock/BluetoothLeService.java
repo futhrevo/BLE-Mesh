@@ -13,6 +13,7 @@ import android.bluetooth.BluetoothProfile;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Binder;
+import android.os.Handler;
 import android.os.IBinder;
 import android.os.ParcelUuid;
 import android.support.annotation.Nullable;
@@ -20,6 +21,7 @@ import android.util.Log;
 
 import com.silabs.bluetooth_mesh.BluetoothMesh;
 
+import java.lang.reflect.Method;
 import java.util.List;
 
 import in.hedera.reku.swimclock.utils.BleQueue;
@@ -44,15 +46,15 @@ public class BluetoothLeService extends Service {
     private int mConnectionState = STATE_DISCONNECTED;
     private BleQueue bleQueue;
     private int priority = BluetoothGatt.CONNECTION_PRIORITY_BALANCED;
-    public int gattHandle = 0;
+    public int gattHandle = 2;
     public int mtuSize = 69;
-
+    final Handler handler = new Handler();
 
     // Implements callback methods for GATT events that the app cares about. For
     // example, connection change and services discovered.
     private final BluetoothGattCallback mGattCallback = new BluetoothGattCallback() {
         @Override
-        public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
+        public void onConnectionStateChange(final BluetoothGatt gatt, int status, int newState) {
             String intentAction;
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 if (newState == BluetoothProfile.STATE_CONNECTED) {
@@ -60,7 +62,14 @@ public class BluetoothLeService extends Service {
                     mConnectionState = STATE_CONNECTED;
                     broadcastUpdate(intentAction);
                     Log.i(TAG, "Connected to GATT server.");
-                    Log.i(TAG, "Attempting to start service discovery:" + gatt.discoverServices());
+                    handler.postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            refreshDeviceCache(gatt);
+                            Log.i(TAG, "Attempting to start service discovery:" + gatt.discoverServices());
+                        }
+                    }, 300);
+
                 } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                     intentAction = Constants.ACTION_GATT_DISCONNECTED;
                     mConnectionState = STATE_DISCONNECTED;
@@ -124,7 +133,7 @@ public class BluetoothLeService extends Service {
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
             super.onCharacteristicChanged(gatt, characteristic);
             Log.d(TAG, "Characteristic changed UUID : " +characteristic.getUuid().toString());
-            Log.d(TAG, "value cahnged is" + characteristic.getValue());
+            Log.d(TAG, "value changed is" + characteristic.getValue());
             broadcastUpdate(Constants.ACTION_CHARACTERISTIC_CHANGE, characteristic);
         }
 
@@ -159,10 +168,10 @@ public class BluetoothLeService extends Service {
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 Log.d(TAG, "onMtuChanged");
                 broadcastUpdate(Constants.ACTION_MTU_CHANGED);
-                if (gattHandle == 1) {
+                if (gattHandle == Constants.HANDLE_PROVISION) {
                     enableProvisionOutNotification();
                 }
-                if (gattHandle == 0) {
+                if (gattHandle == Constants.HANDLE_PROXY) {
                     proxyOutNotification();
                 }
             } else {
@@ -392,6 +401,7 @@ public class BluetoothLeService extends Service {
      * @return true if characteristic indications request is queued else false
      */
     public boolean enableProvisionOutNotification() {
+        Log.d(TAG, "enableProvisionOutNotification");
         if (mBluetoothGatt == null)
             return false;
         BluetoothGattService btServ = mBluetoothGatt.getService(BluetoothMesh.meshUnprovisionedService);
@@ -423,6 +433,7 @@ public class BluetoothLeService extends Service {
      * @return true if characteristic write was queued else false
      */
     public boolean writeProvisionInChar(int gattHandle, byte[] writeArray) {
+        Log.d(TAG, "Write to Mesh Provision Service, meshUnprovisionedInChar");
         if(writeArray.length > mtuSize) {
             byte[][] chunks = sliceWrite(writeArray, mtuSize);
             for (byte[] chunk : chunks) {
@@ -466,6 +477,7 @@ public class BluetoothLeService extends Service {
      * @return true if characteristic notification enabled else false
      */
     public boolean proxyOutNotification() {
+        Log.d(TAG, "proxyOutNotification");
         if (mBluetoothGatt == null) {
             return false;
         }
@@ -494,6 +506,7 @@ public class BluetoothLeService extends Service {
      * @return true if characteristic write was queued else false
      */
     public boolean writeProxyInChar(int gattHandle, byte[] writeArray) {
+        Log.d(TAG, "Write to Mesh Proxy Service, meshProxyInCharacteristic");
         if(writeArray.length > mtuSize) {
             byte[][] chunks = sliceWrite(writeArray, mtuSize);
             for (byte[] chunk : chunks) {
@@ -541,6 +554,18 @@ public class BluetoothLeService extends Service {
         }
         // No need to change bluetooth state
         return true;
+    }
+
+    private void refreshDeviceCache(BluetoothGatt gatt) {
+        Log.d(TAG, "refresh device cache");
+        try {
+            Method localMethod = gatt.getClass().getMethod("refresh");
+            if (localMethod != null) {
+                localMethod.invoke(gatt);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "An exception occured while refreshing device");
+        }
     }
 
     @Override

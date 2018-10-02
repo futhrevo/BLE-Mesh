@@ -7,6 +7,9 @@ public class Constants {
     public static final String SCANNING =  "Scanning" ;
     public static final long SCAN_TIMEOUT = 5000;
 
+    public static final int HANDLE_PROVISION = 1;
+    public static final int HANDLE_PROXY = 2;
+
     public static final int STATE_DISCONNECTED = 0;
     public static final int STATE_CONNECTING = 1;
     public static final int STATE_CONNECTED = 2;
@@ -49,6 +52,10 @@ public class Constants {
     public static final int PROVISION_DISCONNECT = 306;
 
     public static final String EVENT_CONNECT = "CONNECT";
+
+    public static final int REQ_DCD = -1001;
+    public static final int REQ_HIDE_DIALOG = -1002;
+    public static final int REQ_CONNECT_PROXY = -1010;
 
     public static byte[][] sliceWrite(byte[] writeArray, int mtuSize) {
         int len = writeArray.length;
