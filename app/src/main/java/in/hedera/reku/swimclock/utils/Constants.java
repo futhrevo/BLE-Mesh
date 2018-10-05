@@ -1,5 +1,9 @@
 package in.hedera.reku.swimclock.utils;
 
+import android.bluetooth.le.ScanResult;
+
+import java.util.Comparator;
+
 public class Constants {
     public static final String HOME_TAG = "HOME";
     public static final String SCAN_TAG = "SCAN";
@@ -56,6 +60,14 @@ public class Constants {
     public static final int REQ_DCD = -1001;
     public static final int REQ_HIDE_DIALOG = -1002;
     public static final int REQ_CONNECT_PROXY = -1010;
+    public static final int REQ_CONNECT_HIGH_RSSI = -1020;
+
+    public static Comparator<ScanResult> rssiComparator = new Comparator<ScanResult>() {
+        @Override
+        public int compare(ScanResult lhs, ScanResult rhs) {
+            return Integer.compare(rhs.getRssi(), lhs.getRssi());
+        }
+    };
 
     public static byte[][] sliceWrite(byte[] writeArray, int mtuSize) {
         int len = writeArray.length;

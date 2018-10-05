@@ -8,6 +8,8 @@ import android.os.Handler;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
 import android.support.v7.app.AlertDialog;
+import android.support.v7.widget.LinearLayoutManager;
+import android.support.v7.widget.RecyclerView;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -16,17 +18,21 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.CompoundButton;
 import android.widget.EditText;
-import android.widget.ExpandableListView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.ToggleButton;
 
+import com.silabs.bluetooth_mesh.DeviceInfo;
 import com.silabs.bluetooth_mesh.NetworkInfo;
 
 import in.hedera.reku.swimclock.FragListener;
 import in.hedera.reku.swimclock.MainActivity;
 import in.hedera.reku.swimclock.R;
+import in.hedera.reku.swimclock.scanner.ClickListener;
+import in.hedera.reku.swimclock.scanner.ScannerFragment;
 
 
 /**
@@ -40,8 +46,12 @@ public class HomeFragment extends Fragment {
     private ProgressBar progressBar;
     private LinearLayout emptyLayout;
     private LinearLayout networkLayout;
-    private ExpandableListView expandableListView;
-    private GroupExpandableListAdapter groupExpandableListAdapter;
+    private DeviceListAdapter devicesAdapter;
+    private GroupListAdapter groupsAdapter;
+    private RecyclerView devicesRecyclerView;
+    private RecyclerView groupsRecyclerView;
+//    private ExpandableListView expandableListView;
+//    private GroupExpandableListAdapter groupExpandableListAdapter;
     private LinearLayout emptyNetworkLayout;
 
     final Handler handler = new Handler();
@@ -78,8 +88,29 @@ public class HomeFragment extends Fragment {
         progressBar = view.findViewById(R.id.progress_bar_nw);
         emptyLayout = view.findViewById(R.id.empty_nw_layout);
         networkLayout = view.findViewById(R.id.network_layout);
-        expandableListView = view.findViewById(R.id.expandable_group_list);
+//        expandableListView = view.findViewById(R.id.expandable_group_list);
         emptyNetworkLayout = view.findViewById(R.id.group_list_emptyview);
+        devicesRecyclerView = (RecyclerView) view.findViewById(R.id.home_devices_list);
+        groupsRecyclerView = view.findViewById(R.id.home_group_list);
+        setUpDeviceRecycler();
+        setupGroupsRecycler();
+        ToggleButton toggle = (ToggleButton) view.findViewById(R.id.toggleButton);
+        toggle.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                if(networkInfo != null) {
+                    if (isChecked) {
+                        // The toggle is enabled, show groups
+                        groupsRecyclerView.setVisibility(View.VISIBLE);
+                        devicesRecyclerView.setVisibility(View.GONE);
+                    } else {
+                        // The toggle is disabled, show devices
+                        groupsRecyclerView.setVisibility(View.GONE);
+                        devicesRecyclerView.setVisibility(View.VISIBLE);
+                    }
+                }
+            }
+        });
         Button button = view.findViewById(R.id.create_nw_button);
         button.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -96,6 +127,49 @@ public class HomeFragment extends Fragment {
         });
         callback.readNetInfo(this);
         return view;
+    }
+
+    private void setupGroupsRecycler() {
+        groupsAdapter = new GroupListAdapter(getContext());
+        groupsRecyclerView.setAdapter(groupsAdapter);
+        groupsRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
+        groupsRecyclerView.addOnItemTouchListener(new ScannerFragment.RecyclerTouchListener(getContext(), groupsRecyclerView, new ClickListener() {
+            @Override
+            public void onClick(View view, int position) {
+                Log.d(TAG, "Group clicked at " + position + " do on off");
+            }
+
+            @Override
+            public void onLongClick(View view, int position) {
+                Log.d(TAG, "group long clicked at  "+ position);
+            }
+        }));
+    }
+
+    private void setUpDeviceRecycler() {
+        devicesAdapter = new DeviceListAdapter(getContext());
+        devicesRecyclerView.setAdapter(devicesAdapter);
+        devicesRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
+        devicesRecyclerView.addOnItemTouchListener(new ScannerFragment.RecyclerTouchListener(getContext(), this.devicesRecyclerView, new ClickListener() {
+            @Override
+            public void onClick(View view, int position) {
+                DeviceInfo deviceInfo = HomeFragment.this.devicesAdapter.getItemAtPosition(position);
+                String str = HomeFragment.TAG;
+                StringBuilder stringBuilder = new StringBuilder();
+                stringBuilder.append("item clicked at ");
+                stringBuilder.append(deviceInfo.name());
+                Log.d(str, stringBuilder.toString());
+                Log.i(TAG, "User wants to on or off device");
+                callback.onOffSet(deviceInfo);
+            }
+
+            @Override
+            public void onLongClick(View view, int position) {
+                Log.d(HomeFragment.TAG, "item long clicked, add/ remove group");
+                DeviceInfo deviceInfo = devicesAdapter.getItemAtPosition(position);
+                callback.addRemoveGroup(deviceInfo);
+            }
+        }));
     }
 
     @Override
@@ -194,12 +268,13 @@ public class HomeFragment extends Fragment {
             groupCount.setText(String.valueOf(deviceCount));
             if(deviceCount == 0) {
                 emptyNetworkLayout.setVisibility(View.VISIBLE);
-                expandableListView.setVisibility(View.GONE);
+                devicesRecyclerView.setVisibility(View.GONE);
+                groupsRecyclerView.setVisibility(View.GONE);
             } else {
                 emptyNetworkLayout.setVisibility(View.GONE);
-                expandableListView.setVisibility(View.VISIBLE);
-                groupExpandableListAdapter = new GroupExpandableListAdapter(getContext(), networkInfo.groupsInfo());
-                expandableListView.setAdapter(groupExpandableListAdapter);
+                devicesRecyclerView.setVisibility(View.VISIBLE);
+                devicesAdapter.setDevices(networkInfo.devicesInfo());
+                groupsAdapter.setGroups(networkInfo.groupsInfo());
             }
         }
     }

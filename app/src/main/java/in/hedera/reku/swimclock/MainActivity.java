@@ -40,10 +40,12 @@ import com.silabs.bluetooth_mesh.ConfigOperation;
 import com.silabs.bluetooth_mesh.DeviceInfo;
 import com.silabs.bluetooth_mesh.GroupInfo;
 import com.silabs.bluetooth_mesh.MeshCallback;
+import com.silabs.bluetooth_mesh.Model;
 import com.silabs.bluetooth_mesh.NetworkInfo;
 import com.silabs.bluetooth_mesh.Utils.Converters;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -78,6 +80,7 @@ import static in.hedera.reku.swimclock.utils.Constants.PROXY_SET_SEND;
 import static in.hedera.reku.swimclock.utils.Constants.PROXY_SET_WRITE;
 import static in.hedera.reku.swimclock.utils.Constants.PROXY_START;
 import static in.hedera.reku.swimclock.utils.Constants.PROXY_WRITE;
+import static in.hedera.reku.swimclock.utils.Constants.REQ_CONNECT_HIGH_RSSI;
 import static in.hedera.reku.swimclock.utils.Constants.REQ_CONNECT_PROXY;
 import static in.hedera.reku.swimclock.utils.Constants.REQ_DCD;
 import static in.hedera.reku.swimclock.utils.Constants.REQ_HIDE_DIALOG;
@@ -95,6 +98,7 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
     private boolean isGattPending = false;
     private int gattPriority = BluetoothGatt.CONNECTION_PRIORITY_BALANCED;
     private NetworkInfo netInfo;
+    private GroupInfo groupInfo;
     private DeviceInfo deviceInfo;
 
     private TinyMachine meshMachine;
@@ -104,6 +108,10 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
     private UnProvDevice unProvDevice;
     private ProxyDevice proxyDevice;
     private ProgressDialog progressDialog;
+    ArrayList<ScanResult> identityMatchResults;
+    ArrayList<ScanResult> networkMatchResults;
+    private Model onoffmodel = new Model(true, 4096, "ONOFF");
+    private boolean status = false;
 
 
     @Override
@@ -155,9 +163,9 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
             netInfo = btmesh.getNetworkbyID(netKeyIndex);
             int pub_address = 0xc000 + appKeyIndex * 2;
             int sub_address = 0xc000 + appKeyIndex * 2 + 1;
-            GroupInfo new_group = new GroupInfo(name, netInfo, appKeyIndex, appKey, pub_address, sub_address);
-            netInfo.addGroup(new_group);
-            btmesh.bindLocalModels(netInfo, new_group);
+            groupInfo = new GroupInfo(name, netInfo, appKeyIndex, appKey, pub_address, sub_address);
+            netInfo.addGroup(groupInfo);
+            btmesh.bindLocalModels(netInfo, groupInfo);
             btmesh.saveNetworkDB(netInfo);
         }
 
@@ -171,6 +179,8 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
             } else if (proxyMachine.getCurrentState() >= PROXY_START) {
                 bleService.writeProxyInChar(Constants.HANDLE_PROXY, send);
                 proxyMachine.transitionTo(PROXY_DCD_WRITE_SEND);
+            }else {
+                bleService.writeProxyInChar(Constants.HANDLE_PROXY, send);
             }
         }
 
@@ -178,10 +188,21 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
         public void didReceiveDCD(byte[] dcd, int status) {
             super.didReceiveDCD(dcd, status);
             Log.d(TAG, "BTMESH asking didReceiveDCD" + String.valueOf(status));
+            if(status != 0) {
+                showDialog("Failed to fetch DCD", 2000);
+                Log.e(TAG, "Fetching DCD failed");
+                return;
+            }
             proxyMachine.transitionTo(PROXY_READY);
-            deviceInfo.setDcd(dcd);
-            netInfo.updateDeviceInfo(deviceInfo);
-            btmesh.saveNetworkDB(netInfo);
+            if(deviceInfo != null) {
+                deviceInfo.setDcd(dcd);
+                showDialog("DCD Received", 2000);
+                netInfo.updateDeviceInfo(deviceInfo);
+                btmesh.saveNetworkDB(netInfo);
+                refreshHomeContent(netInfo);
+            } else {
+                Log.e(TAG, "device info is null");
+            }
             Log.d(TAG, " Got DCD : " + Converters.getHexValue(dcd));
         }
 
@@ -274,6 +295,7 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
                 proxyDevice = new ProxyDevice(unProvDevice.getmac());
                 unProvDevice = null;
                 gotoHomeScreen();
+                showDialog("Connecting...", 5000);
                 handler.sendEmptyMessageDelayed(REQ_CONNECT_PROXY, 2000);
 
             } else {
@@ -303,10 +325,7 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
             netInfo.setNetID(index);
             btmesh.saveNetworkDB(netInfo);
 //            createDemoGroup(defaultNetwork);
-            HomeFragment homeFragment = (HomeFragment) getSupportFragmentManager().findFragmentByTag(Constants.HOME_TAG);
-            if (homeFragment != null) {
-                homeFragment.onNetworkCreated(netInfo);
-            }
+            refreshHomeContent(netInfo);
             meshMachine.transitionTo(MESH_READY);
             createGroup("Default");
         }
@@ -326,6 +345,14 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
             }
         }
     };
+
+    private void refreshHomeContent(NetworkInfo netInfo) {
+        HomeFragment homeFragment = (HomeFragment) getSupportFragmentManager().findFragmentByTag(Constants.HOME_TAG);
+        if (homeFragment != null) {
+            Log.i(TAG, "refreshing home content");
+            homeFragment.onNetworkCreated(netInfo);
+        }
+    }
 
     @Override
     public void createNetwork(String name) {
@@ -352,7 +379,7 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
     @Override
     public void readNetInfo(Fragment frag) {
         if (btmesh != null) {
-            NetworkInfo netinfo = btmesh.getNetworkbyID(0);
+//            NetworkInfo netinfo = btmesh.getNetworkbyID(0);
             if(frag instanceof HomeFragment) {
                 ((HomeFragment)frag).showNetInfo(netInfo);
             }
@@ -421,6 +448,28 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
         }
     }
 
+    @Override
+    public void addRemoveGroup(DeviceInfo deviceInfo) {
+        if(groupInfo.devices().contains(deviceInfo)){
+            Log.i(TAG, "Removing device from demo group");
+            btmesh.removeFromGroup(deviceInfo, 0,netInfo, groupInfo, onoffmodel);
+        } else {
+            Log.i(TAG, "Adding device to demo group with on off model");
+            btmesh.addToGroup(deviceInfo, 0, netInfo, groupInfo, onoffmodel);
+        }
+
+    }
+
+    @Override
+    public void onOffSet(DeviceInfo deviceInfo) {
+        if(!groupInfo.devices().contains(deviceInfo)){
+            Log.d(TAG, "device is not part of the group");
+            return;
+        }
+        Log.d(TAG, "setting device on");
+        status = !status;
+        btmesh.onOffSet(deviceInfo, groupInfo, 0, status, 100, 100, false, true);
+    }
 
 
     @Override
@@ -437,6 +486,10 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
             case REQ_HIDE_DIALOG:
                 progressDialog.dismiss();
                 break;
+
+            case REQ_CONNECT_HIGH_RSSI:
+                selectHighestRssi();
+                break;
         }
         return true;
     }
@@ -444,14 +497,14 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
     private void requestDCD() {
         btmesh.DCDRequest(deviceInfo);
         proxyMachine.transitionTo(PROXY_DCD);
-        deviceInfo = null;
+//        deviceInfo = null;
     }
     private void addDeviceInfo(String name, int meshAddress, byte[] deviceUuid) {
         deviceInfo = new DeviceInfo(name, deviceUuid);
-        NetworkInfo netinfo = btmesh.getNetworkbyID(0);
-        deviceInfo.addToNetwork(netinfo, meshAddress);
-        netinfo.addDevice(deviceInfo);
-        btmesh.saveNetworkDB(netinfo);
+//        NetworkInfo netinfo = btmesh.getNetworkbyID(0);
+        deviceInfo.addToNetwork(netInfo, meshAddress);
+        netInfo.addDevice(deviceInfo);
+        btmesh.saveNetworkDB(netInfo);
     }
 
     private void showDialog(String message, long delay) {
@@ -539,6 +592,8 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
                 }
                 if (btmesh != null) {
                     btmesh.disconnectGatt(handle);
+                    proxyDevice = null;
+                    unProvDevice = null;
                 }
 
             } else if (Constants.ACTION_GATT_SERVICES_DISCOVERED.equals(action)) {
@@ -575,7 +630,7 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
                 final byte[] data = intent.getByteArrayExtra(Constants.EXTRA_DATA);
                 ParcelUuid uuidExtra = intent.getParcelableExtra(Constants.EXTRA_CHARACTERISTIC);
                 UUID uuid = uuidExtra.getUuid();
-                if (uuid.equals(BluetoothMesh.meshUnprovisionedOutChar)) {
+                if (uuid.equals(BluetoothMesh.meshUnprovisionedOutChar) || uuid.equals(BluetoothMesh.meshProxyOutChar)) {
                     if (provisionMachine.getCurrentState() == PROVISION_SEND) {
                         provisionMachine.transitionTo(PROVISION_WRITE);
                     } else if (proxyMachine.getCurrentState() == PROXY_SEND) {
@@ -755,17 +810,19 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
             ScanFilter filter = new ScanFilter.Builder().setServiceUuid(meshProxyServ).build();
             // TODO: Enable this line when testing with mesh devices
 //          filters.add(filter);
+            networkMatchResults = new ArrayList<ScanResult>();
+            identityMatchResults = new ArrayList<ScanResult>();
             bleScanner.startScanning(this, SCAN_TIMEOUT, filters);
         }
 
         @Override
         public void scanningStarted() {
-
+            showDialog("Scanning", 60000);
         }
 
         @Override
         public void scanningStopped() {
-
+            showDialog("Stopping scan", 3000);
         }
 
         @Override
@@ -777,12 +834,12 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
             boolean idMatch = false;
             boolean netMatch = false;
             ParcelUuid meshProxyServ = ParcelUuid.fromString(BluetoothMesh.meshProxyService.toString());
-            NetworkInfo netInfo = btmesh.getNetworkDB().get(0);
+//            NetworkInfo netInfo = btmesh.getNetworkDB().get(0);
             if (result.getScanRecord() != null && result.getScanRecord().getServiceUuids() != null && result.getScanRecord().getServiceUuids().contains(meshProxyServ)) {
                 for (DeviceInfo devInfo : netInfo.devicesInfo()) {
                     if (devInfo.dcd() == null) {
                         if (btmesh.deviceIdentityMatches(result.getScanRecord().getBytes(), devInfo) >= 0) {
-//                            identityMatchResults.add(result);
+                            identityMatchResults.add(result);
                             idMatch = true;
                             break;
                         }
@@ -790,7 +847,7 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
                 }
                 // If we already have an Identity match, it won't match the Network beacon
                 if (!idMatch && btmesh.networkHashMatches(netInfo, result.getScanRecord().getBytes()) >= 0) {
-//                    networkMatchResults.add(result);
+                    networkMatchResults.add(result);
                     netMatch = true;
                 }
 
@@ -800,7 +857,7 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
                 }
                 bleScanner.stopScanning();
                 proxyMachine.transitionTo(Constants.PROXY_CONNECT);
-                connectGatt(Constants.HANDLE_PROXY);
+                handler.sendEmptyMessageDelayed(Constants.REQ_CONNECT_HIGH_RSSI, 1000);
             }
         }
     }
@@ -817,6 +874,7 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
             if ("LOAD".equals(event)) {
                 if (!btmesh.getNetworkDB().isEmpty()) {
                     netInfo = btmesh.getNetworkDB().get(0);
+                    groupInfo = netInfo.groupsInfo().get(0);
                     Log.d(TAG, "Network DB contains some meshes " + netInfo.name());
                     tm.transitionTo(MESH_READY);
                 } else {
@@ -878,6 +936,28 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
         String getMac() {
             return pmac;
         }
+    }
+
+    private void selectHighestRssi() {
+        BluetoothDevice bluetoothDevice;
+        if (this.proxyDevice != null) {
+            connectGatt(Constants.HANDLE_PROXY);
+        }
+        Collections.sort(this.identityMatchResults, Constants.rssiComparator);
+        Collections.sort(this.networkMatchResults, Constants.rssiComparator);
+        if (this.identityMatchResults.size() > 0) {
+            bluetoothDevice = ((ScanResult) this.identityMatchResults.get(0)).getDevice();
+        } else if (this.networkMatchResults.size() > 0) {
+            bluetoothDevice = ((ScanResult) this.networkMatchResults.get(0)).getDevice();
+        } else {
+            bluetoothDevice = null;
+        }
+        if (bluetoothDevice != null) {
+            this.proxyDevice = new ProxyDevice(bluetoothDevice.getAddress());
+            connectGatt(Constants.HANDLE_PROXY);
+        }
+        this.identityMatchResults.clear();
+        this.networkMatchResults.clear();
     }
 }
 

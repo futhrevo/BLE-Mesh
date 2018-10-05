@@ -7,19 +7,19 @@
     tools:context=".home.HomeFragment">
 
     <ProgressBar
+        android:id="@+id/progress_bar_nw"
         style="@style/Widget.AppCompat.ProgressBar.Horizontal"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:indeterminate="true"
-        android:visibility="invisible"
-        android:id="@+id/progress_bar_nw"/>
+        android:visibility="invisible" />
 
     <LinearLayout
         android:id="@+id/empty_nw_layout"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
         android:layout_gravity="center_vertical"
+        android:orientation="vertical"
         tools:visibility="gone">
 
         <TextView
@@ -48,10 +48,21 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical">
+
         <RelativeLayout
             android:id="@+id/network_title_layout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
+
+            <ToggleButton
+                android:id="@+id/toggleButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentTop="true"
+                android:layout_centerHorizontal="true"
+                android:textOn="Show Devices"
+                android:textOff="Show Groups"
+                android:text="ToggleButton" />
 
             <TextView
                 android:id="@+id/network_title"
@@ -80,14 +91,18 @@
                 tools:text="0" />
         </RelativeLayout>
 
-        <ExpandableListView
-            android:id="@+id/expandable_group_list"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            tools:visibility="gone"
-            >
+        <android.support.v7.widget.RecyclerView
+            android:id="@+id/home-devices-list"
+            android:layout_width="fill_parent"
+            android:layout_height="fill_parent"
+            android:visibility="gone" />
 
-        </ExpandableListView>
+        <android.support.v7.widget.RecyclerView
+            android:id="@+id/home-group-list"
+            android:layout_width="fill_parent"
+            android:layout_height="fill_parent"
+            android:visibility="gone">
+        </android.support.v7.widget.RecyclerView>
 
         <LinearLayout
             android:id="@+id/group_list_emptyview"

@@ -259,7 +259,7 @@ public class ScannerFragment extends Fragment implements ScannerInterface {
         }
     }
 
-    public class RecyclerTouchListener implements RecyclerView.OnItemTouchListener {
+    public static class RecyclerTouchListener implements RecyclerView.OnItemTouchListener {
         private ClickListener clicklistener;
         private GestureDetector gestureDetector;
 
