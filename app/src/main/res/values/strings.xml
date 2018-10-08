@@ -5,4 +5,8 @@
     <string name="title_settings">Settings</string>
 
     <string name="networks_empty">No Networks created. Press the button below to create your first network</string>
+
+    <!-- TODO: Remove or change this placeholder text -->
+    <string name="hello_blank_fragment">Hello blank fragment</string>
+    <string name="pref_delete_network">pref_key_network_key</string>
 </resources>

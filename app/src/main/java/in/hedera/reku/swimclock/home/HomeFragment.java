@@ -3,11 +3,15 @@ package in.hedera.reku.swimclock.home;
 
 import android.content.Context;
 import android.content.DialogInterface;
+import android.graphics.Canvas;
 import android.os.Bundle;
 import android.os.Handler;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
 import android.support.v7.app.AlertDialog;
+import android.support.v7.widget.LinearLayoutManager;
+import android.support.v7.widget.RecyclerView;
+import android.support.v7.widget.helper.ItemTouchHelper;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -17,16 +21,18 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.ExpandableListView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
+import com.silabs.bluetooth_mesh.DeviceInfo;
 import com.silabs.bluetooth_mesh.NetworkInfo;
 
 import in.hedera.reku.swimclock.FragListener;
 import in.hedera.reku.swimclock.MainActivity;
 import in.hedera.reku.swimclock.R;
+import in.hedera.reku.swimclock.scanner.ClickListener;
+import in.hedera.reku.swimclock.utils.RecyclerTouchListener;
 
 
 /**
@@ -40,12 +46,12 @@ public class HomeFragment extends Fragment {
     private ProgressBar progressBar;
     private LinearLayout emptyLayout;
     private LinearLayout networkLayout;
-    private ExpandableListView expandableListView;
-    private GroupExpandableListAdapter groupExpandableListAdapter;
     private LinearLayout emptyNetworkLayout;
-
+    private RecyclerView devicesRecyclerView;
     final Handler handler = new Handler();
     private NetworkInfo networkInfo;
+    private DeviceListAdapter adapter;
+    SwipeController swipeController = null;
 
 
     public HomeFragment() {
@@ -69,6 +75,12 @@ public class HomeFragment extends Fragment {
         setHasOptionsMenu(true);
     }
 
+    @Override
+    public void onResume() {
+        super.onResume();
+        Log.d(TAG, "returned to home");
+        callback.readNetInfo(this);
+    }
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
@@ -78,8 +90,9 @@ public class HomeFragment extends Fragment {
         progressBar = view.findViewById(R.id.progress_bar_nw);
         emptyLayout = view.findViewById(R.id.empty_nw_layout);
         networkLayout = view.findViewById(R.id.network_layout);
-        expandableListView = view.findViewById(R.id.expandable_group_list);
         emptyNetworkLayout = view.findViewById(R.id.group_list_emptyview);
+        devicesRecyclerView = view.findViewById(R.id.home_devices_list);
+        setUpRecycler();
         Button button = view.findViewById(R.id.create_nw_button);
         button.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -114,9 +127,9 @@ public class HomeFragment extends Fragment {
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         switch (item.getItemId()) {
-            case R.id.menu_delete_nw:
-                Log.d(TAG, "delete network");
-                callback.deleteNetwork();
+            case R.id.connect_nw:
+                Log.d(TAG, "User wants to connect Network");
+                callback.connectNetwork();
                 return true;
             default:
                 return super.onOptionsItemSelected(item);
@@ -124,6 +137,43 @@ public class HomeFragment extends Fragment {
 
     }
 
+    void setUpRecycler() {
+        adapter= new DeviceListAdapter(getContext());
+        devicesRecyclerView.setAdapter(adapter);
+        devicesRecyclerView.setLayoutManager( new LinearLayoutManager(getContext()));
+        devicesRecyclerView.addOnItemTouchListener(new RecyclerTouchListener(getContext(), devicesRecyclerView, new ClickListener() {
+            @Override
+            public void onClick(View view, int position) {
+                DeviceInfo deviceInfo = adapter.getItemAtPosition(position);
+                Log.d(TAG, "item clicked at " + deviceInfo.name());
+            }
+
+            @Override
+            public void onLongClick(View view, int position) {
+
+                Log.d(TAG, "item long clicked");
+            }
+        }));
+        swipeController = new SwipeController(new SwipeControllerActions() {
+            @Override
+            public void onLeftClicked(int position) {
+                super.onLeftClicked(position);
+            }
+
+            @Override
+            public void onRightClicked(int position) {
+                super.onRightClicked(position);
+            }
+        });
+        ItemTouchHelper itemTouchHelper = new ItemTouchHelper(swipeController);
+        itemTouchHelper.attachToRecyclerView(devicesRecyclerView);
+        devicesRecyclerView.addItemDecoration(new RecyclerView.ItemDecoration() {
+            @Override
+            public void onDraw(Canvas c, RecyclerView parent, RecyclerView.State state) {
+                swipeController.onDraw(c);
+            }
+        });
+    }
     private void showAddNetworkDialog(Context c) {
         final EditText taskEditText = new EditText(c);
         AlertDialog dialog = new AlertDialog.Builder(c)
@@ -194,12 +244,11 @@ public class HomeFragment extends Fragment {
             groupCount.setText(String.valueOf(deviceCount));
             if(deviceCount == 0) {
                 emptyNetworkLayout.setVisibility(View.VISIBLE);
-                expandableListView.setVisibility(View.GONE);
+                devicesRecyclerView.setVisibility(View.GONE);
             } else {
                 emptyNetworkLayout.setVisibility(View.GONE);
-                expandableListView.setVisibility(View.VISIBLE);
-                groupExpandableListAdapter = new GroupExpandableListAdapter(getContext(), networkInfo.groupsInfo());
-                expandableListView.setAdapter(groupExpandableListAdapter);
+                devicesRecyclerView.setVisibility(View.VISIBLE);
+                adapter.setDevices(networkInfo.devicesInfo());
             }
         }
     }

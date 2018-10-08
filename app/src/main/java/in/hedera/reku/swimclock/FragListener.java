@@ -17,6 +17,7 @@ public interface FragListener {
     void gotoHomeScreen();
     void setProxy(DeviceInfo deviceInfo);
     void setRelay(DeviceInfo deviceInfo);
+    void connectNetwork();
 
     // Scan Fragment
     void startProvision(String mac, String advertisement);

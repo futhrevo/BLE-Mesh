@@ -65,7 +65,7 @@ public class BluetoothLeService extends Service {
                     handler.postDelayed(new Runnable() {
                         @Override
                         public void run() {
-                            refreshDeviceCache(gatt);
+//                            refreshDeviceCache(gatt);
                             Log.i(TAG, "Attempting to start service discovery:" + gatt.discoverServices());
                         }
                     }, 300);

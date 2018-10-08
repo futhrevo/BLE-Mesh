@@ -80,15 +80,16 @@
                 tools:text="0" />
         </RelativeLayout>
 
-        <ExpandableListView
-            android:id="@+id/expandable_group_list"
+        <android.support.v7.widget.RecyclerView
+            android:id="@+id/home-devices-list"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            android:visibility="gone"
+            tools:listitem="@layout/list_group_item"
             tools:visibility="gone"
             >
 
-        </ExpandableListView>
-
+        </android.support.v7.widget.RecyclerView>
         <LinearLayout
             android:id="@+id/group_list_emptyview"
             android:layout_width="match_parent"
