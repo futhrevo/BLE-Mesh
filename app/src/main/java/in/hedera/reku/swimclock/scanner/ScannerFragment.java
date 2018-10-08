@@ -1,6 +1,5 @@
 package in.hedera.reku.swimclock.scanner;
 
-
 import android.arch.lifecycle.Observer;
 import android.arch.lifecycle.ViewModelProviders;
 import android.bluetooth.le.ScanFilter;
@@ -82,7 +81,7 @@ public class ScannerFragment extends Fragment implements ScannerInterface {
     @Override
     public void onStop() {
         super.onStop();
-        if(ble_scanning) {
+        if (ble_scanning) {
             bleScanner.stopScanning();
         }
     }
@@ -94,10 +93,8 @@ public class ScannerFragment extends Fragment implements ScannerInterface {
         npdViewModel = ViewModelProviders.of(this).get(NPDViewModel.class);
     }
 
-
     @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container,
-                             Bundle savedInstanceState) {
+    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         // Inflate the layout for this fragment
         View view = inflater.inflate(R.layout.fragment_scanner, container, false);
         recyclerView = view.findViewById(R.id.deviceList);
@@ -106,7 +103,7 @@ public class ScannerFragment extends Fragment implements ScannerInterface {
         final NPDeviceAdapter adapter = new NPDeviceAdapter(getContext());
         recyclerView.setAdapter(adapter);
         bleScanner = new BleScanner(getContext());
-        recyclerView.setLayoutManager( new LinearLayoutManager(getContext()));
+        recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
         recyclerView.addOnItemTouchListener(new RecyclerTouchListener(getContext(), recyclerView, new ClickListener() {
             @Override
             public void onClick(View view, int position) {
@@ -118,7 +115,7 @@ public class ScannerFragment extends Fragment implements ScannerInterface {
                 TextView adView = view.findViewById(R.id.bdadv);
                 String mac = (String) addView.getText();
                 String advertisement = (String) adView.getText();
-                Log.d(TAG, "provision me " + mac +" advertising " + advertisement);
+                Log.d(TAG, "provision me " + mac + " advertising " + advertisement);
                 callback.startProvision(mac, advertisement);
             }
 
@@ -155,11 +152,11 @@ public class ScannerFragment extends Fragment implements ScannerInterface {
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         switch (item.getItemId()) {
-            case R.id.scan_menu:
-                toggleScanning();
-                return true;
-            default:
-                return super.onOptionsItemSelected(item);
+        case R.id.scan_menu:
+            toggleScanning();
+            return true;
+        default:
+            return super.onOptionsItemSelected(item);
         }
 
     }
@@ -167,7 +164,7 @@ public class ScannerFragment extends Fragment implements ScannerInterface {
     private void setScanState(boolean b) {
         ble_scanning = b;
         MenuItem item = menu.findItem(R.id.scan_menu);
-        if(item == null) {
+        if (item == null) {
             return;
         }
         if (b) {
@@ -180,14 +177,15 @@ public class ScannerFragment extends Fragment implements ScannerInterface {
     }
 
     private void toggleEmptyLayout(boolean empty) {
-        if(empty) {
+        if (empty) {
             recyclerView.setVisibility(View.GONE);
             emptyView.setVisibility(View.VISIBLE);
-        }else {
+        } else {
             recyclerView.setVisibility(View.VISIBLE);
             emptyView.setVisibility(View.GONE);
         }
     }
+
     @Override
     public void scanResult(ScanResult result) {
         ParcelUuid meshServ = ParcelUuid.fromString(BluetoothMesh.meshUnprovisionedService.toString());
@@ -196,20 +194,22 @@ public class ScannerFragment extends Fragment implements ScannerInterface {
             return;
         }
         byte[] readuuid = result.getScanRecord().getServiceData(meshServ);
-//        Log.i(TAG, "received byte array of length : " + readuuid.length);
-//        Log.i(TAG, "Device Read UUID: " + Converters.getHexValue(readuuid));
-//        if (result.getScanRecord() != null && result.getScanRecord().getServiceUuids() != null && result.getScanRecord().getServiceUuids().contains(meshUnprovServ)) {
-//
-//        }
-//        List<ParcelUuid>  UUIDs= result.getScanRecord().getServiceUuids();
-//        UUID device = UUID.nameUUIDFromBytes(result.getScanRecord().getBytes());
-//        byte[] uuid = Constants.getBytesFromUUID(device);
-        if(readuuid == null) {
+        // Log.i(TAG, "received byte array of length : " + readuuid.length);
+        // Log.i(TAG, "Device Read UUID: " + Converters.getHexValue(readuuid));
+        // if (result.getScanRecord() != null &&
+        // result.getScanRecord().getServiceUuids() != null &&
+        // result.getScanRecord().getServiceUuids().contains(meshUnprovServ)) {
+        //
+        // }
+        // List<ParcelUuid> UUIDs= result.getScanRecord().getServiceUuids();
+        // UUID device = UUID.nameUUIDFromBytes(result.getScanRecord().getBytes());
+        // byte[] uuid = Constants.getBytesFromUUID(device);
+        if (readuuid == null) {
             Log.i(TAG, "Service data empty for mesh provisioning service on " + result.getDevice().getAddress());
             return;
         }
         byte[] uuid = Arrays.copyOfRange(readuuid, 0, 16);
-//        Log.i(TAG, "Length of uuid : " + uuid.length);
+        // Log.i(TAG, "Length of uuid : " + uuid.length);
         Log.i(TAG, "Device UUID: " + Converters.getHexValue(uuid));
         NPDevice npDevice = new NPDevice(result.getDevice(), result.getRssi(), uuid);
         npdViewModel.insert(npDevice);
@@ -235,14 +235,14 @@ public class ScannerFragment extends Fragment implements ScannerInterface {
     }
 
     private void toggleScanning() {
-        if(!bleScanner.isScanning()){
+        if (!bleScanner.isScanning()) {
             npdViewModel.deleteAll();
             simpleToast(Constants.SCANNING, 2000);
             List<ScanFilter> filters = new ArrayList<>();
             ParcelUuid meshServ = ParcelUuid.fromString(BluetoothMesh.meshUnprovisionedService.toString());
             ScanFilter filter = new ScanFilter.Builder().setServiceUuid(meshServ).build();
             // TODO: Enable this line when testing with mesh devices
-          filters.add(filter);
+            filters.add(filter);
             bleScanner.startScanning(this, Constants.SCAN_TIMEOUT, filters);
         } else {
             bleScanner.stopScanning();

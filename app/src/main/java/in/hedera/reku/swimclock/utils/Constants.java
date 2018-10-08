@@ -8,7 +8,7 @@ public class Constants {
     public static final String HOME_TAG = "HOME";
     public static final String SCAN_TAG = "SCAN";
     public static final String SETTINGS_TAG = "SETTINGS";
-    public static final String SCANNING =  "Scanning" ;
+    public static final String SCANNING = "Scanning";
     public static final long SCAN_TIMEOUT = 5000;
 
     public static final int HANDLE_PROVISION = 1;
@@ -44,7 +44,7 @@ public class Constants {
     public static final int PROXY_SET = 207;
     public static final int PROXY_DCD_WRITE_SEND = 208;
     public static final int PROXY_SET_SEND = 216;
-    public static final int  PROXY_SET_WRITE = 226;
+    public static final int PROXY_SET_WRITE = 226;
 
     public static final int PROVISION_INIT = 300;
     public static final int PROVISION_CONNECT = 301;

@@ -80,7 +80,7 @@ public class GroupExpandableListAdapter extends BaseExpandableListAdapter {
         DeviceInfo deviceInfo = (DeviceInfo) getChild(groupPosition, childPosition);
         if(convertView == null) {
             LayoutInflater layoutInflater = (LayoutInflater) this.context.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
-            convertView = layoutInflater.inflate(R.layout.list_group_item, null);
+            convertView = layoutInflater.inflate(R.layout.list_device_item, null);
         }
         TextView deviceTitleView = convertView.findViewById(R.id.group_device_item);
         deviceTitleView.setText(deviceInfo.name());

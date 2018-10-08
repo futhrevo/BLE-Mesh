@@ -25,4 +25,8 @@ public interface FragListener {
     void deleteNetwork();
 
     void disableUIinteraction(boolean on);
+
+    void addRemoveGroup(DeviceInfo deviceInfo);
+
+    void onOffSet(DeviceInfo deviceInfo);
 }
