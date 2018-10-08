@@ -2,7 +2,6 @@ package in.hedera.reku.swimclock.home;
 
 import android.content.Context;
 import android.content.DialogInterface;
-import android.graphics.Canvas;
 import android.os.Bundle;
 import android.os.Handler;
 import android.support.annotation.Nullable;
@@ -10,7 +9,6 @@ import android.support.v4.app.Fragment;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
-import android.support.v7.widget.helper.ItemTouchHelper;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -50,13 +48,10 @@ public class HomeFragment extends Fragment {
     private GroupListAdapter groupsAdapter;
     private RecyclerView devicesRecyclerView;
     private RecyclerView groupsRecyclerView;
-    // private ExpandableListView expandableListView;
-    // private GroupExpandableListAdapter groupExpandableListAdapter;
     private LinearLayout emptyNetworkLayout;
     final Handler handler = new Handler();
     private NetworkInfo networkInfo;
     private DeviceListAdapter adapter;
-    SwipeController swipeController = null;
 
     public HomeFragment() {
         // Required empty public constructor
@@ -202,45 +197,6 @@ public class HomeFragment extends Fragment {
             return super.onOptionsItemSelected(item);
         }
 
-    }
-
-    void setUpRecycler() {
-        adapter = new DeviceListAdapter(getContext());
-        devicesRecyclerView.setAdapter(adapter);
-        devicesRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
-        devicesRecyclerView.addOnItemTouchListener(
-                new RecyclerTouchListener(getContext(), devicesRecyclerView, new ClickListener() {
-                    @Override
-                    public void onClick(View view, int position) {
-                        DeviceInfo deviceInfo = adapter.getItemAtPosition(position);
-                        Log.d(TAG, "item clicked at " + deviceInfo.name());
-                    }
-
-                    @Override
-                    public void onLongClick(View view, int position) {
-
-                        Log.d(TAG, "item long clicked");
-                    }
-                }));
-        swipeController = new SwipeController(new SwipeControllerActions() {
-            @Override
-            public void onLeftClicked(int position) {
-                super.onLeftClicked(position);
-            }
-
-            @Override
-            public void onRightClicked(int position) {
-                super.onRightClicked(position);
-            }
-        });
-        ItemTouchHelper itemTouchHelper = new ItemTouchHelper(swipeController);
-        itemTouchHelper.attachToRecyclerView(devicesRecyclerView);
-        devicesRecyclerView.addItemDecoration(new RecyclerView.ItemDecoration() {
-            @Override
-            public void onDraw(Canvas c, RecyclerView parent, RecyclerView.State state) {
-                swipeController.onDraw(c);
-            }
-        });
     }
 
     private void showAddNetworkDialog(Context c) {
