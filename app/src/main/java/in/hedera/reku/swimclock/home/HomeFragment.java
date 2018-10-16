@@ -17,12 +17,11 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
-import android.widget.CompoundButton;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.RadioGroup;
 import android.widget.TextView;
-import android.widget.ToggleButton;
 
 import com.silabs.bluetooth_mesh.DeviceInfo;
 import com.silabs.bluetooth_mesh.NetworkInfo;
@@ -51,7 +50,7 @@ public class HomeFragment extends Fragment {
     private LinearLayout emptyNetworkLayout;
     final Handler handler = new Handler();
     private NetworkInfo networkInfo;
-    private DeviceListAdapter adapter;
+
 
     public HomeFragment() {
         // Required empty public constructor
@@ -93,20 +92,22 @@ public class HomeFragment extends Fragment {
         groupsRecyclerView = view.findViewById(R.id.home_group_list);
         setUpDeviceRecycler();
         setupGroupsRecycler();
-        ToggleButton toggle = (ToggleButton) view.findViewById(R.id.toggleButton);
-        toggle.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+        RadioGroup radioGroup = (RadioGroup) view.findViewById(R.id.toggleButton);
+        radioGroup.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener() {
             @Override
-            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-                if (networkInfo != null) {
-                    if (isChecked) {
-                        // The toggle is enabled, show groups
-                        groupsRecyclerView.setVisibility(View.VISIBLE);
-                        devicesRecyclerView.setVisibility(View.GONE);
-                    } else {
-                        // The toggle is disabled, show devices
-                        groupsRecyclerView.setVisibility(View.GONE);
-                        devicesRecyclerView.setVisibility(View.VISIBLE);
-                    }
+            public void onCheckedChanged(RadioGroup group, int checkedId) {
+                if (networkInfo == null || networkInfo.devicesInfo().isEmpty()) {
+                    showEmptyDevicesLayout();
+                    return;
+                }
+                if(checkedId == R.id.toggle_devices) {
+                    // The toggle is disabled, show devices
+                    groupsRecyclerView.setVisibility(View.GONE);
+                    devicesRecyclerView.setVisibility(View.VISIBLE);
+                }else {
+                    // The toggle is enabled, show groups
+                    groupsRecyclerView.setVisibility(View.VISIBLE);
+                    devicesRecyclerView.setVisibility(View.GONE);
                 }
             }
         });
@@ -252,6 +253,11 @@ public class HomeFragment extends Fragment {
         }
     }
 
+    private void showEmptyDevicesLayout() {
+        emptyNetworkLayout.setVisibility(View.VISIBLE);
+        devicesRecyclerView.setVisibility(View.GONE);
+        groupsRecyclerView.setVisibility(View.GONE);
+    }
     public void showNetInfo(NetworkInfo networkInfo) {
         this.networkInfo = networkInfo;
         if (networkInfo == null) {
@@ -265,9 +271,7 @@ public class HomeFragment extends Fragment {
 
             groupCount.setText(String.valueOf(deviceCount));
             if (deviceCount == 0) {
-                emptyNetworkLayout.setVisibility(View.VISIBLE);
-                devicesRecyclerView.setVisibility(View.GONE);
-                groupsRecyclerView.setVisibility(View.GONE);
+                showEmptyDevicesLayout();
             } else {
                 emptyNetworkLayout.setVisibility(View.GONE);
                 devicesRecyclerView.setVisibility(View.VISIBLE);

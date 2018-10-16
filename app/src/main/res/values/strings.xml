@@ -9,4 +9,11 @@
     <!-- TODO: Remove or change this placeholder text -->
     <string name="hello_blank_fragment">Hello blank fragment</string>
     <string name="pref_delete_network">pref_key_network_key</string>
+    <string name="show_devices">Show Devices</string>
+    <string name="scan_and_provision">Scan and Provision</string>
+    <string name="add_to_this_network">No device in network, provision your first device and add to this network</string>
+    <string name="devices">Devices</string>
+    <string name="togglebutton">ToggleButton</string>
+    <string name="create_network">Create Network</string>
+    <string name="show_groups">Show Groups</string>
 </resources>
