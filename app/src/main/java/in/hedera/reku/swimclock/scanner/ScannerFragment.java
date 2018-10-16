@@ -5,9 +5,11 @@ import android.arch.lifecycle.ViewModelProviders;
 import android.bluetooth.le.ScanFilter;
 import android.bluetooth.le.ScanResult;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.ParcelUuid;
+import android.preference.PreferenceManager;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
 import android.support.v7.widget.LinearLayoutManager;
@@ -241,9 +243,11 @@ public class ScannerFragment extends Fragment implements ScannerInterface {
             List<ScanFilter> filters = new ArrayList<>();
             ParcelUuid meshServ = ParcelUuid.fromString(BluetoothMesh.meshUnprovisionedService.toString());
             ScanFilter filter = new ScanFilter.Builder().setServiceUuid(meshServ).build();
-            // TODO: Enable this line when testing with mesh devices
             filters.add(filter);
-            bleScanner.startScanning(this, Constants.SCAN_TIMEOUT, filters);
+            SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
+            long timeout = sharedPreferences.getInt(getString(R.string.pref_scan_timeout), Constants.SCAN_TIMEOUT) * 1000;
+            Log.d(TAG, "timeout in ms " + timeout);
+            bleScanner.startScanning(this, timeout, filters);
         } else {
             bleScanner.stopScanning();
         }

@@ -9,7 +9,7 @@ public class Constants {
     public static final String SCAN_TAG = "SCAN";
     public static final String SETTINGS_TAG = "SETTINGS";
     public static final String SCANNING = "Scanning";
-    public static final long SCAN_TIMEOUT = 5000;
+    public static final int SCAN_TIMEOUT = 5;
 
     public static final int HANDLE_PROVISION = 1;
     public static final int HANDLE_PROXY = 2;

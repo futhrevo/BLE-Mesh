@@ -1,9 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
-    <PreferenceCategory android:title="Network" android:key="pref_key_network_settings">
-        <Preference android:key="@string/pref_delete_network" android:title="Delete Network" />
+<android.support.v7.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:asp="http://schemas.android.com/apk/res-auto">
+    <PreferenceCategory
+        android:key="pref_key_network_settings"
+        android:title="Network">
+        <Preference
+            android:key="@string/pref_delete_network"
+            android:title="Delete Network" />
     </PreferenceCategory>
-    <PreferenceCategory android:title="Scan" android:key="pref_key_scan_settings">
-        <Preference android:key="pref_scan_timeout" android:title="Scan Timeout" />
+    <PreferenceCategory
+        android:key="pref_key_scan_settings"
+        android:title="Scan">
+        <SeekBarPreference
+            android:defaultValue="15"
+            android:key="@string/pref_scan_timeout"
+            android:max="60"
+            android:title="Scan Timeout (in sec)"
+            asp:min="5" />
     </PreferenceCategory>
-</PreferenceScreen>
+</android.support.v7.preference.PreferenceScreen>
