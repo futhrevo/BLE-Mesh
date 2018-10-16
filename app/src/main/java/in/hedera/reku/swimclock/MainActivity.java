@@ -61,7 +61,6 @@ import in.hedera.reku.swimclock.utils.Constants;
 import in.hedera.reku.swimclock.utils.ProgressDialog;
 
 import static com.silabs.bluetooth_mesh.ConfigOperation.Status.mesh_foundation_status_success;
-import static in.hedera.reku.swimclock.utils.Constants.HANDLE_PROXY;
 import static in.hedera.reku.swimclock.utils.Constants.MESH_GROUP_APPKEY;
 import static in.hedera.reku.swimclock.utils.Constants.MESH_INIT;
 import static in.hedera.reku.swimclock.utils.Constants.MESH_READY;
@@ -81,6 +80,8 @@ import static in.hedera.reku.swimclock.utils.Constants.PROXY_SET_SEND;
 import static in.hedera.reku.swimclock.utils.Constants.PROXY_SET_WRITE;
 import static in.hedera.reku.swimclock.utils.Constants.PROXY_START;
 import static in.hedera.reku.swimclock.utils.Constants.PROXY_WRITE;
+import static in.hedera.reku.swimclock.utils.Constants.REQ_CONNECT_GATT_PROV;
+import static in.hedera.reku.swimclock.utils.Constants.REQ_CONNECT_GATT_PROXY;
 import static in.hedera.reku.swimclock.utils.Constants.REQ_CONNECT_HIGH_RSSI;
 import static in.hedera.reku.swimclock.utils.Constants.REQ_CONNECT_PROXY;
 import static in.hedera.reku.swimclock.utils.Constants.REQ_DCD;
@@ -90,13 +91,13 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
     private static final String TAG = MainActivity.class.getSimpleName();
 
     private static final int PERMISSIONS_REQUEST_ALL_PERMISSIONS = 101;
-    private final Object mConnectionLock = new Object(); // Lock variable
     private final Handler handler = new Handler(this);
     public boolean isBTEnabled;
     private BluetoothMesh btmesh;
     private BluetoothLeService bleService;
     private boolean isBound = false;
     private boolean isGattPending = false;
+    private boolean isScanPending = false;
     private int gattPriority = BluetoothGatt.CONNECTION_PRIORITY_BALANCED;
     private NetworkInfo netInfo;
     private GroupInfo groupInfo;
@@ -112,7 +113,8 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
     private BottomNavigationView navigation;
     ArrayList<ScanResult> identityMatchResults;
     ArrayList<ScanResult> networkMatchResults;
-    private Model onoffmodel = new Model(true, 4096, "ONOFF");
+    private Model onoffmodel = new Model(false, -1412627713, "Vendor");
+    private int elementId = 0;
     private boolean status = false;
 
     @Override
@@ -248,9 +250,9 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
         public void didCompleteConfig(ConfigOperation previous_cfg, ConfigOperation next_cfg) {
             super.didCompleteConfig(previous_cfg, next_cfg);
             Log.d(TAG, "BTMESH asking didCompleteConfig");
-            DeviceInfo devInfo = previous_cfg.device();
-            GroupInfo groupInfo = previous_cfg.group();
-            NetworkInfo netInfo = previous_cfg.network();
+//            deviceInfo = previous_cfg.device();
+//            groupInfo = previous_cfg.group();
+//            netInfo = previous_cfg.network();
             int kind = previous_cfg.kind();
             int status = previous_cfg.status();
             if (kind == ConfigOperation.CFG_ENABLE_PROXY) {
@@ -264,17 +266,21 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
 
             }
             switch (previous_cfg.convertStatus(status)) {
-            case mesh_foundation_status_success:
-                Log.i(TAG, "mesh_foundation_status_success ");
-                break;
-            case mesh_foundation_status_invalid_publish_params:
-                Log.e(TAG, "mesh_foundation_status_invalid_publish_params");
-                break;
-            case mesh_foundation_status_timeout:
-                Log.e(TAG, "mesh_foundation_status_timeout");
-                break;
-            default:
-                break;
+                case mesh_foundation_status_success:
+                    Log.i(TAG, "mesh_foundation_status_success ");
+                    showDialog("Success", 500);
+                    break;
+                case mesh_foundation_status_invalid_publish_params:
+                    Log.e(TAG, "mesh_foundation_status_invalid_publish_params");
+                    showDialog("Invalid publish params", 500);
+                    break;
+                case mesh_foundation_status_timeout:
+                    Log.e(TAG, "mesh_foundation_status_timeout");
+                    showDialog("Timeout", 500);
+                    break;
+                default:
+                    showDialog("Unknown config Result ", 1000);
+                    break;
             }
             btmesh.applyNextCfg();
 
@@ -283,7 +289,7 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
 
         @Override
         public void statusCallback(int model, int device_address, int current_status, int target_status,
-                int remaining_ms) {
+                                   int remaining_ms) {
             super.statusCallback(model, device_address, current_status, target_status, remaining_ms);
             Log.d(TAG, "BTMESH asking statusCallback");
         }
@@ -314,6 +320,7 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
             super.disconnectionRequest(gattHandle);
             Log.d(TAG, "BTMESH asking disconnectionRequest");
             bleService.disconnect();
+//            bleService.close();
             btmesh.disconnectGatt(gattHandle);
             if (provisionMachine.getCurrentState() > PROVISION_INIT) {
                 provisionMachine.transitionTo(PROVISION_DISCONNECT);
@@ -340,13 +347,13 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
             // super.stateChanged(state);
             Log.d(TAG, "BTMESH asking stateChanged " + String.valueOf(state));
             switch (state) {
-            case BluetoothMesh.INITIALISED:
-                Log.d(TAG, "Mesh Initialized");
-                break;
+                case BluetoothMesh.INITIALISED:
+                    Log.d(TAG, "Mesh Initialized");
+                    break;
 
-            case BluetoothMesh.DEINITIALISED:
-                Log.d(TAG, "Mesh Deinitialized");
-                break;
+                case BluetoothMesh.DEINITIALISED:
+                    Log.d(TAG, "Mesh Deinitialized");
+                    break;
             }
         }
     };
@@ -469,6 +476,7 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
             btmesh.removeFromGroup(deviceInfo, 0, netInfo, groupInfo, onoffmodel);
         } else {
             Log.i(TAG, "Adding device to demo group with on off model");
+            showDialog("Adding device to group", 2000);
             btmesh.addToGroup(deviceInfo, 0, netInfo, groupInfo, onoffmodel);
         }
 
@@ -476,34 +484,49 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
 
     @Override
     public void onOffSet(DeviceInfo deviceInfo) {
+        status = !status;
+        if(deviceInfo == null) {
+            Log.d(TAG, "setting group message on");
+            btmesh.onOffSet(null, groupInfo, elementId, status, 100, 100, false, true);
+            return;
+        }
         if (!groupInfo.devices().contains(deviceInfo)) {
             Log.d(TAG, "device is not part of the group");
             return;
         }
         Log.d(TAG, "setting device on");
-        status = !status;
-        btmesh.onOffSet(deviceInfo, groupInfo, 0, status, 100, 100, false, true);
+
+        btmesh.onOffSet(deviceInfo, groupInfo, elementId, status, 100, 100, false, true);
     }
 
     @Override
     public boolean handleMessage(Message msg) {
         switch (msg.what) {
-        case REQ_DCD:
-            requestDCD();
-            break;
+            case REQ_DCD:
+                requestDCD();
+                break;
 
-        case REQ_CONNECT_PROXY:
-            new ConnectProxy(getApplicationContext());
-            break;
+            case REQ_CONNECT_PROXY:
+                new ConnectProxy(getApplicationContext());
+                break;
 
-        case REQ_HIDE_DIALOG:
-            progressDialog.dismiss();
-            break;
+            case REQ_HIDE_DIALOG:
+                progressDialog.dismiss();
+                break;
 
-        case REQ_CONNECT_HIGH_RSSI:
-            selectHighestRssi();
-            break;
+            case REQ_CONNECT_HIGH_RSSI:
+                selectHighestRssi();
+                break;
+
+            case REQ_CONNECT_GATT_PROXY:
+                connectGatt(Constants.HANDLE_PROXY);
+                break;
+
+            case REQ_CONNECT_GATT_PROV:
+                connectGatt(Constants.HANDLE_PROVISION);
+                break;
         }
+
         return true;
     }
 
@@ -531,6 +554,7 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
     public void connectGatt(int gattHandle) {
         if (bleService.isConnected()) {
             bleService.disconnect();
+//            bleService.close();
             isGattPending = true;
             return;
         }
@@ -593,35 +617,26 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
             if (Constants.ACTION_GATT_CONNECTED.equals(action)) {
 
             } else if (Constants.ACTION_GATT_DISCONNECTED.equals(action)) {
+                if (btmesh != null && btmesh.isConnected()) {
+                    btmesh.disconnectGatt(handle);
+                }
                 if (isGattPending) {
                     // if provisioning is pending
                     if (provisionMachine.getCurrentState() == PROVISION_CONNECT && unProvDevice != null) {
-                        connectGatt(Constants.HANDLE_PROVISION);
+                        handler.sendEmptyMessageDelayed(REQ_CONNECT_GATT_PROV, 500);
                         return;
                     }
                     if (proxyMachine.getCurrentState() == Constants.PROXY_CONNECT && proxyDevice != null) {
-                        connectGatt(Constants.HANDLE_PROXY);
+                        handler.sendEmptyMessageDelayed(REQ_CONNECT_GATT_PROXY, 500);
                         return;
                     }
                 }
-                if (btmesh != null) {
-                    btmesh.disconnectGatt(handle);
-                    proxyDevice = null;
-                    unProvDevice = null;
-                }
+
+                proxyDevice = null;
+                unProvDevice = null;
+
 
             } else if (Constants.ACTION_GATT_SERVICES_DISCOVERED.equals(action)) {
-
-            } else if (Constants.ACTION_DATA_AVAILABLE.equals(action)) {
-                final byte[] data = intent.getByteArrayExtra(Constants.EXTRA_DATA);
-                ParcelUuid uuidExtra = intent.getParcelableExtra(Constants.EXTRA_CHARACTERISTIC);
-                UUID uuid = uuidExtra.getUuid();
-
-            } else if (Constants.ACTION_GATT_SERVICES_ERROR.equals(action)) {
-                provisionMachine.transitionTo(PROVISION_INIT);
-                proxyMachine.transitionTo(PROXY_INIT);
-                showDialog("GATT Error", 2000);
-            } else if (Constants.ACTION_MTU_CHANGED.equals(action)) {
                 // provision is pending
                 if (provisionMachine.getCurrentState() == PROVISION_CONNECT) {
                     provisionMachine.transitionTo(Constants.PROVISION_READY);
@@ -636,6 +651,20 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
                         proxyMachine.transitionTo(PROXY_READY);
                     }
                 }
+            } else if (Constants.ACTION_DATA_AVAILABLE.equals(action)) {
+                final byte[] data = intent.getByteArrayExtra(Constants.EXTRA_DATA);
+                ParcelUuid uuidExtra = intent.getParcelableExtra(Constants.EXTRA_CHARACTERISTIC);
+                UUID uuid = uuidExtra.getUuid();
+
+            } else if (Constants.ACTION_GATT_SERVICES_ERROR.equals(action)) {
+                provisionMachine.transitionTo(PROVISION_INIT);
+                proxyMachine.transitionTo(PROXY_INIT);
+                showDialog("GATT Error", 2000);
+                if (btmesh != null && btmesh.isConnected()) {
+                    btmesh.disconnectGatt(handle);
+                }
+            } else if (Constants.ACTION_MTU_CHANGED.equals(action)) {
+
             } else if (Constants.ACTION_CHARACTERISTIC_WRITE.equals(action)) {
                 final byte[] data = intent.getByteArrayExtra(Constants.EXTRA_DATA);
                 ParcelUuid uuidExtra = intent.getParcelableExtra(Constants.EXTRA_CHARACTERISTIC);
@@ -679,25 +708,25 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
             Fragment fragment = null;
             String tag = null;
             switch (item.getItemId()) {
-            case R.id.navigation_home:
-                fragment = new HomeFragment();
-                tag = Constants.HOME_TAG;
-                break;
-            case R.id.navigation_scanner:
-                if (needPermissions(getApplicationContext())) {
-                    requestPermissions();
-                }
-                if (getBTStatus() & isBTEnabled) {
-                    fragment = new ScannerFragment();
-                    tag = Constants.SCAN_TAG;
-                } else {
-                    askBTSettings();
-                }
-                break;
-            case R.id.navigation_settings:
-                fragment = new SettingsFragment();
-                tag = Constants.SETTINGS_TAG;
-                break;
+                case R.id.navigation_home:
+                    fragment = new HomeFragment();
+                    tag = Constants.HOME_TAG;
+                    break;
+                case R.id.navigation_scanner:
+                    if (needPermissions(getApplicationContext())) {
+                        requestPermissions();
+                    }
+                    if (getBTStatus() & isBTEnabled) {
+                        fragment = new ScannerFragment();
+                        tag = Constants.SCAN_TAG;
+                    } else {
+                        askBTSettings();
+                    }
+                    break;
+                case R.id.navigation_settings:
+                    fragment = new SettingsFragment();
+                    tag = Constants.SETTINGS_TAG;
+                    break;
             }
             return loadFragment(fragment, tag);
         }
@@ -705,30 +734,30 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
-            @NonNull int[] grantResults) {
+                                           @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         switch (requestCode) {
-        case PERMISSIONS_REQUEST_ALL_PERMISSIONS:
-            boolean hasAllPermissions = true;
-            for (int i = 0; i < grantResults.length; ++i) {
-                if (grantResults[i] != PackageManager.PERMISSION_GRANTED) {
-                    hasAllPermissions = false;
-                    Log.e(TAG, "Unable to get permission " + permissions[i]);
+            case PERMISSIONS_REQUEST_ALL_PERMISSIONS:
+                boolean hasAllPermissions = true;
+                for (int i = 0; i < grantResults.length; ++i) {
+                    if (grantResults[i] != PackageManager.PERMISSION_GRANTED) {
+                        hasAllPermissions = false;
+                        Log.e(TAG, "Unable to get permission " + permissions[i]);
+                    }
                 }
-            }
-            if (hasAllPermissions) {
-                Log.d(TAG, "All permissions granted");
+                if (hasAllPermissions) {
+                    Log.d(TAG, "All permissions granted");
 
-            } else {
-                Toast.makeText(this, "Unable to get all required permissions", Toast.LENGTH_LONG).show();
-                Log.i(TAG, "Permission has been denied by user");
-                // finish();
-                return;
-            }
+                } else {
+                    Toast.makeText(this, "Unable to get all required permissions", Toast.LENGTH_LONG).show();
+                    Log.i(TAG, "Permission has been denied by user");
+                    // finish();
+                    return;
+                }
 
-            break;
-        default:
-            Log.e(TAG, "Unexpected request code");
+                break;
+            default:
+                Log.e(TAG, "Unexpected request code");
 
         }
     }
@@ -746,15 +775,15 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
         return ActivityCompat.checkSelfPermission(context,
                 Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED
                 || ActivityCompat.checkSelfPermission(context,
-                        Manifest.permission.BLUETOOTH) != PackageManager.PERMISSION_GRANTED
+                Manifest.permission.BLUETOOTH) != PackageManager.PERMISSION_GRANTED
                 || ActivityCompat.checkSelfPermission(context,
-                        Manifest.permission.BLUETOOTH_ADMIN) != PackageManager.PERMISSION_GRANTED;
+                Manifest.permission.BLUETOOTH_ADMIN) != PackageManager.PERMISSION_GRANTED;
     }
 
     private void requestPermissions() {
         Log.d(TAG, "requestPermissions: ");
-        String[] permissions = new String[] { Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.BLUETOOTH,
-                Manifest.permission.BLUETOOTH_ADMIN, };
+        String[] permissions = new String[]{Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.BLUETOOTH,
+                Manifest.permission.BLUETOOTH_ADMIN,};
         ActivityCompat.requestPermissions(this, permissions, PERMISSIONS_REQUEST_ALL_PERMISSIONS);
     }
 

@@ -48,6 +48,8 @@ public class BluetoothLeService extends Service {
     private int priority = BluetoothGatt.CONNECTION_PRIORITY_BALANCED;
     public int gattHandle = 2;
     public int mtuSize = 69;
+    public int attempts = 0;
+    public int error_handler = 0;
     final Handler handler = new Handler();
 
     // Implements callback methods for GATT events that the app cares about. For
@@ -56,36 +58,70 @@ public class BluetoothLeService extends Service {
         @Override
         public void onConnectionStateChange(final BluetoothGatt gatt, int status, int newState) {
             String intentAction;
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                if (newState == BluetoothProfile.STATE_CONNECTED) {
-                    intentAction = Constants.ACTION_GATT_CONNECTED;
-                    mConnectionState = STATE_CONNECTED;
-                    broadcastUpdate(intentAction);
-                    Log.i(TAG, "Connected to GATT server.");
-                    handler.postDelayed(new Runnable() {
-                        @Override
-                        public void run() {
-//                            refreshDeviceCache(gatt);
-                            Log.i(TAG, "Attempting to start service discovery:" + gatt.discoverServices());
-                        }
-                    }, 300);
+            switch (status) {
+                case BluetoothGatt.GATT_SUCCESS:
+                    switch (newState) {
+                        case BluetoothProfile.STATE_CONNECTED:
+                            error_handler = 0;
+                            attempts = 0;
+                            intentAction = Constants.ACTION_GATT_CONNECTED;
+                            mConnectionState = STATE_CONNECTED;
+                            broadcastUpdate(intentAction);
+                            Log.i(TAG, "Connected to GATT server.");
+                            bleQueue.requestConnectionPriority(priority);
+                            handler.postDelayed(new Runnable() {
+                                @Override
+                                public void run() {
+                                    bleQueue.requestMtu(69);
+                                }
+                            }, 500);
+                            return;
 
-                } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                    intentAction = Constants.ACTION_GATT_DISCONNECTED;
+                        case BluetoothProfile.STATE_DISCONNECTED:
+                            intentAction = Constants.ACTION_GATT_DISCONNECTED;
+                            mConnectionState = STATE_DISCONNECTED;
+                            broadcastUpdate(intentAction);
+                            Log.i(TAG, "Disconnected from GATT server.");
+
+                            // Necessary to disconnect and close because of Android bug:
+                            // https://code.google.com/p/android/issues/detail?id=58381#c17
+                            // http://stackoverflow.com/a/18889509/2616544
+                            disconnect();
+                            return;
+                        default:
+                            return;
+                    }
+
+                case 8:
+                    intentAction = Constants.ACTION_GATT_SERVICES_ERROR;
                     mConnectionState = STATE_DISCONNECTED;
+                    Log.i(TAG, "Gatt server error, status: " + status + ", newState: " + newState);
                     broadcastUpdate(intentAction);
-                    Log.i(TAG, "Disconnected from GATT server.");
+                    return;
+                case 133:
+                    error_handler++;
+                    mConnectionState = STATE_DISCONNECTED;
+                    if(error_handler > 2) {
+                        intentAction = Constants.ACTION_GATT_SERVICES_ERROR;
+                        Log.i(TAG, "Gatt server error, status: " + status + ", newState: " + newState);
+                        broadcastUpdate(intentAction);
 
-                    // Necessary to disconnect and close because of Android bug:
-                    // https://code.google.com/p/android/issues/detail?id=58381#c17
-                    // http://stackoverflow.com/a/18889509/2616544
-                    disconnect();
-                }
-            } else {
-                intentAction = Constants.ACTION_GATT_SERVICES_ERROR;
-                mConnectionState = STATE_DISCONNECTED;
-                Log.i(TAG, "Gatt server error, status: " + status + ", newState: " + newState);
-                broadcastUpdate(intentAction);
+                        return;
+                    }
+                    gatt.connect();
+                    return;
+                default:
+                    attempts++;
+                    if(attempts > 2) {
+                        attempts = 0;
+                        intentAction = Constants.ACTION_GATT_SERVICES_ERROR;
+                        mConnectionState = STATE_DISCONNECTED;
+                        Log.i(TAG, "Gatt server error, status: " + status + ", newState: " + newState);
+                        broadcastUpdate(intentAction);
+                        return;
+                    }
+                    gatt.connect();
+                    return;
             }
         }
 
@@ -93,8 +129,12 @@ public class BluetoothLeService extends Service {
         public void onServicesDiscovered(BluetoothGatt gatt, int status) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 broadcastUpdate(Constants.ACTION_GATT_SERVICES_DISCOVERED);
-                bleQueue.requestConnectionPriority(priority);
-                bleQueue.requestMtu(69);
+                if (gattHandle == Constants.HANDLE_PROVISION) {
+                    enableProvisionOutNotification();
+                }
+                if (gattHandle == Constants.HANDLE_PROXY) {
+                    proxyOutNotification();
+                }
             } else {
                 Log.w(TAG, "onServicesDiscovered received: " + status);
             }
@@ -113,7 +153,7 @@ public class BluetoothLeService extends Service {
         public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
             super.onCharacteristicWrite(gatt, characteristic, status);
             bleQueue.onCharacteristicWrite(gatt, characteristic, status);
-            Log.d(TAG, "Characteristic writing successful UUID : " +characteristic.getUuid().toString());
+            Log.d(TAG, "Characteristic writing successful UUID : " + characteristic.getUuid().toString());
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 Log.d(TAG, "Characteristic writing successful");
                 broadcastUpdate(Constants.ACTION_CHARACTERISTIC_WRITE, characteristic);
@@ -132,7 +172,7 @@ public class BluetoothLeService extends Service {
         @Override
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
             super.onCharacteristicChanged(gatt, characteristic);
-            Log.d(TAG, "Characteristic changed UUID : " +characteristic.getUuid().toString());
+            Log.d(TAG, "Characteristic changed UUID : " + characteristic.getUuid().toString());
             Log.d(TAG, "value changed is" + characteristic.getValue());
             broadcastUpdate(Constants.ACTION_CHARACTERISTIC_CHANGE, characteristic);
         }
@@ -161,23 +201,24 @@ public class BluetoothLeService extends Service {
         }
 
         @Override
-        public void onMtuChanged(BluetoothGatt gatt, int mtu, int status) {
+        public void onMtuChanged(final BluetoothGatt gatt, int mtu, int status) {
             super.onMtuChanged(gatt, mtu, status);
             bleQueue.onMtuChanged(gatt, mtu, status);
             mtuSize = mtu;
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 Log.d(TAG, "onMtuChanged");
                 broadcastUpdate(Constants.ACTION_MTU_CHANGED);
-                if (gattHandle == Constants.HANDLE_PROVISION) {
-                    enableProvisionOutNotification();
-                }
-                if (gattHandle == Constants.HANDLE_PROXY) {
-                    proxyOutNotification();
-                }
+                handler.postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        refreshDeviceCache(gatt);
+                    }
+                }, 500);
             } else {
                 Log.d(TAG, "onMtuChanged status : " + status + ", mtu : " + mtu);
                 gatt.requestMtu(69);
             }
+
         }
     };
 
@@ -434,13 +475,13 @@ public class BluetoothLeService extends Service {
      */
     public boolean writeProvisionInChar(int gattHandle, byte[] writeArray) {
         Log.d(TAG, "Write to Mesh Provision Service, meshUnprovisionedInChar");
-        if(writeArray.length > mtuSize) {
+        if (writeArray.length > mtuSize) {
             byte[][] chunks = sliceWrite(writeArray, mtuSize);
             for (byte[] chunk : chunks) {
                 writeProvisionInCharIntl(chunk);
             }
             return true;
-        }else {
+        } else {
             writeProvisionInCharIntl(writeArray);
             return true;
         }
@@ -467,7 +508,6 @@ public class BluetoothLeService extends Service {
         writeCharacteristic(meshWrite);
         return true;
     }
-
 
 
     /**
@@ -507,13 +547,13 @@ public class BluetoothLeService extends Service {
      */
     public boolean writeProxyInChar(int gattHandle, byte[] writeArray) {
         Log.d(TAG, "Write to Mesh Proxy Service, meshProxyInCharacteristic");
-        if(writeArray.length > mtuSize) {
+        if (writeArray.length > mtuSize) {
             byte[][] chunks = sliceWrite(writeArray, mtuSize);
             for (byte[] chunk : chunks) {
                 writeProxyInCharIntl(chunk);
             }
             return true;
-        }else {
+        } else {
             writeProxyInCharIntl(writeArray);
             return true;
         }
@@ -539,6 +579,7 @@ public class BluetoothLeService extends Service {
         writeCharacteristic(meshWrite);
         return true;
     }
+
     public boolean isConnected() {
         return mConnectionState == STATE_CONNECTED;
     }
@@ -566,6 +607,7 @@ public class BluetoothLeService extends Service {
         } catch (Exception e) {
             Log.e(TAG, "An exception occured while refreshing device");
         }
+        Log.i(TAG, "Attempting to start service discovery:" + gatt.discoverServices());
     }
 
     @Override

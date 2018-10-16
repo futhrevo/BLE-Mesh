@@ -60,7 +60,10 @@ public class Constants {
     public static final int REQ_DCD = -1001;
     public static final int REQ_HIDE_DIALOG = -1002;
     public static final int REQ_CONNECT_PROXY = -1010;
+    public static final int REQ_CONNECT_GATT_PROXY = -1011;
+    public static final int REQ_CONNECT_GATT_PROV = -1012;
     public static final int REQ_CONNECT_HIGH_RSSI = -1020;
+
 
     public static byte[][] sliceWrite(byte[] writeArray, int mtuSize) {
         int len = writeArray.length;

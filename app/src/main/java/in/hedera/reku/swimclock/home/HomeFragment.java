@@ -137,6 +137,7 @@ public class HomeFragment extends Fragment {
                     @Override
                     public void onClick(View view, int position) {
                         Log.d(TAG, "Group clicked at " + position + " do on off");
+                        callback.onOffSet(null);
                     }
 
                     @Override
