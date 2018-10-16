@@ -1,11 +1,18 @@
 package in.hedera.reku.swimclock.utils;
 
+import android.bluetooth.le.ScanResult;
+
+import java.util.Comparator;
+
 public class Constants {
     public static final String HOME_TAG = "HOME";
     public static final String SCAN_TAG = "SCAN";
     public static final String SETTINGS_TAG = "SETTINGS";
-    public static final String SCANNING =  "Scanning" ;
+    public static final String SCANNING = "Scanning";
     public static final long SCAN_TIMEOUT = 5000;
+
+    public static final int HANDLE_PROVISION = 1;
+    public static final int HANDLE_PROXY = 2;
 
     public static final int STATE_DISCONNECTED = 0;
     public static final int STATE_CONNECTING = 1;
@@ -21,6 +28,7 @@ public class Constants {
     public static final String ACTION_MTU_CHANGED = "in.hedera.reku.swimclock.ACTION_MTU_CHANGED";
     public static final String ACTION_CHARACTERISTIC_WRITE = "in.hedera.reku.swimclock.ACTION_CHARACTERISTIC_WRITE";
     public static final String ACTION_CHARACTERISTIC_CHANGE = "in.hedera.reku.swimclock.ACTION_CHARACTERISTIC_CHANGE";
+    public static final String ACTION_GATT_HANDLE = "in.hedera.reku.swimclock.ACTION_GATT_HANDLE";
 
     public static final int MESH_INIT = 100;
     public static final int MESH_READY = 101;
@@ -28,19 +36,60 @@ public class Constants {
 
     public static final int PROXY_INIT = 200;
     public static final int PROXY_READY = 201;
-    public static final int PROXY_START = 202;
-    public static final int PROXY_SEND = 203;
-    public static final int PROXY_WRITE = 204;
-    public static final int PROXY_DCD = 205;
-    public static final int PROXY_SET = 206;
+    public static final int PROXY_CONNECT = 202;
+    public static final int PROXY_START = 203;
+    public static final int PROXY_SEND = 204;
+    public static final int PROXY_WRITE = 205;
+    public static final int PROXY_DCD = 206;
+    public static final int PROXY_SET = 207;
+    public static final int PROXY_DCD_WRITE_SEND = 208;
     public static final int PROXY_SET_SEND = 216;
-    public static final int  PROXY_SET_WRITE = 226;
+    public static final int PROXY_SET_WRITE = 226;
 
     public static final int PROVISION_INIT = 300;
-    public static final int PROVISION_START = 301;
-    public static final int PROVISION_SEND = 302;
-    public static final int PROVISION_WRITE = 303;
-    public static final int PROVISION_DISCONNECT = 304;
-    public static final int PROVISION_READY = 305;
+    public static final int PROVISION_CONNECT = 301;
+    public static final int PROVISION_READY = 302;
 
+    public static final int PROVISION_START = 303;
+    public static final int PROVISION_SEND = 304;
+    public static final int PROVISION_WRITE = 305;
+    public static final int PROVISION_DISCONNECT = 306;
+
+    public static final String EVENT_CONNECT = "CONNECT";
+
+    public static final int REQ_DCD = -1001;
+    public static final int REQ_HIDE_DIALOG = -1002;
+    public static final int REQ_CONNECT_PROXY = -1010;
+    public static final int REQ_CONNECT_GATT_PROXY = -1011;
+    public static final int REQ_CONNECT_GATT_PROV = -1012;
+    public static final int REQ_CONNECT_HIGH_RSSI = -1020;
+
+
+    public static byte[][] sliceWrite(byte[] writeArray, int mtuSize) {
+        int len = writeArray.length;
+        int chunks = (int) Math.ceil(len / (double) mtuSize);
+        byte[][] ret = new byte[chunks][];
+
+        int start = 0;
+        for (int i = 0; i < chunks; i++) {
+            if (start + mtuSize > len) {
+                ret[i] = new byte[len - start];
+                System.arraycopy(writeArray, start, ret[i], 0, len - start);
+
+            } else {
+                ret[i] = new byte[mtuSize];
+                System.arraycopy(writeArray, start, ret[i], 0, mtuSize);
+            }
+
+            start += mtuSize;
+        }
+        return ret;
+    }
+
+    public static Comparator<ScanResult> rssiComparator = new Comparator<ScanResult>() {
+        @Override
+        public int compare(ScanResult lhs, ScanResult rhs) {
+            return Integer.compare(rhs.getRssi(), lhs.getRssi());
+        }
+    };
 }

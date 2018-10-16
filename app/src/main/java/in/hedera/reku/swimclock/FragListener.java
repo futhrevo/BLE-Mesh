@@ -1,5 +1,7 @@
 package in.hedera.reku.swimclock;
 
+import android.support.v4.app.Fragment;
+
 import com.silabs.bluetooth_mesh.DeviceInfo;
 
 /**
@@ -10,10 +12,12 @@ public interface FragListener {
     // Home Fragment
     void createNetwork(String name);
     void createGroup(String name);
-    void readNetInfo();
+    void readNetInfo(Fragment frag);
     void gotoScannerScreen();
+    void gotoHomeScreen();
     void setProxy(DeviceInfo deviceInfo);
     void setRelay(DeviceInfo deviceInfo);
+    void connectNetwork();
 
     // Scan Fragment
     void startProvision(String mac, String advertisement);
@@ -21,4 +25,8 @@ public interface FragListener {
     void deleteNetwork();
 
     void disableUIinteraction(boolean on);
+
+    void addRemoveGroup(DeviceInfo deviceInfo);
+
+    void onOffSet(DeviceInfo deviceInfo);
 }
