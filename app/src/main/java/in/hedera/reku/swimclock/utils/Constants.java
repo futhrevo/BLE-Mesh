@@ -64,6 +64,8 @@ public class Constants {
     public static final int REQ_CONNECT_GATT_PROV = -1012;
     public static final int REQ_CONNECT_HIGH_RSSI = -1020;
 
+    public static final boolean mock = true;
+
 
     public static byte[][] sliceWrite(byte[] writeArray, int mtuSize) {
         int len = writeArray.length;

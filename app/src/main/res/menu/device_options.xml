@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <item android:id="@+id/menu_add_remove" android:title="Add/Remove to Group" />
-    <item android:id="@+id/menu_factory_reset" android:title="Factory Reset" />
+    <item android:id="@+id/menu_add_remove" android:title="@string/add_remove_to_group" />
+    <item android:id="@+id/menu_factory_reset" android:title="@string/factory_reset" />
 </menu>

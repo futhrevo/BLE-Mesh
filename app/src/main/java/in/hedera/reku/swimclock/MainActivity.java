@@ -470,14 +470,17 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
     }
 
     @Override
-    public void addRemoveGroup(DeviceInfo deviceInfo) {
-        if (groupInfo.devices().contains(deviceInfo)) {
+    public void addRemoveGroup(DeviceInfo deviceInfo, GroupInfo grpInfo) {
+        if(grpInfo == null) {
+            grpInfo = groupInfo;
+        }
+        if (grpInfo.devices().contains(deviceInfo)) {
             Log.i(TAG, "Removing device from demo group");
-            btmesh.removeFromGroup(deviceInfo, 0, netInfo, groupInfo, onoffmodel);
+            btmesh.removeFromGroup(deviceInfo, 0, netInfo, grpInfo, onoffmodel);
         } else {
             Log.i(TAG, "Adding device to demo group with on off model");
             showDialog("Adding device to group", 2000);
-            btmesh.addToGroup(deviceInfo, 0, netInfo, groupInfo, onoffmodel);
+            btmesh.addToGroup(deviceInfo, 0, netInfo, grpInfo, onoffmodel);
         }
 
     }
@@ -497,6 +500,15 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
         Log.d(TAG, "setting device on");
 
         btmesh.onOffSet(deviceInfo, groupInfo, elementId, status, 100, 100, false, true);
+    }
+
+    @Override
+    public void factoryReset(DeviceInfo deviceInfo) {
+        if(deviceInfo != null && netInfo != null) {
+            btmesh.factoryResetDevice(deviceInfo, netInfo);
+            showDialog("Factory Reset", 10000);
+            return;
+        }
     }
 
     @Override
