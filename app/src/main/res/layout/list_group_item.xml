@@ -55,12 +55,5 @@
                 android:paddingBottom="10.0dip" />
 
         </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/group_child_items"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:visibility="gone" />
     </LinearLayout>
 </android.support.v7.widget.CardView>

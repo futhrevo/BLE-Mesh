@@ -16,9 +16,11 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ListView;
 import android.widget.ProgressBar;
 import android.widget.RadioGroup;
 import android.widget.TextView;
@@ -27,6 +29,8 @@ import com.silabs.bluetooth_mesh.BluetoothMesh;
 import com.silabs.bluetooth_mesh.DeviceInfo;
 import com.silabs.bluetooth_mesh.GroupInfo;
 import com.silabs.bluetooth_mesh.NetworkInfo;
+
+import java.util.ArrayList;
 
 import in.hedera.reku.swimclock.FragListener;
 import in.hedera.reku.swimclock.MainActivity;
@@ -286,5 +290,32 @@ public class HomeFragment extends Fragment {
 
     public void groupAction(GroupInfo groupInfo) {
         callback.onOffSet(null, groupInfo);
+    }
+
+    public void listGroupDevices(GroupInfo groupInfo) {
+        AlertDialog.Builder alertDialog = new AlertDialog.Builder(getActivity());
+        alertDialog.setTitle("Devices List");
+        LayoutInflater inflater = getLayoutInflater();
+        View convertView = (View) inflater.inflate(R.layout.list_group_devices, null);
+        alertDialog.setView(convertView);
+        ListView lv = (ListView) convertView.findViewById(R.id.list_group_devices);
+        ArrayList<DeviceInfo> devicesList = groupInfo.devicesList();
+        if (Constants.mock) {
+            for (int i = 0; i < 20; i++) {
+                DeviceInfo deviceInfo = new DeviceInfo("Test" + String.valueOf(i), BluetoothMesh.randomGenerator(16));
+                devicesList.add(deviceInfo);
+            }
+        }
+        String[] devices = new String[devicesList.size()];
+        int index = 0;
+        for(DeviceInfo dvInfo: devicesList) {
+            devices[index] = dvInfo.name();
+            index++;
+        }
+
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(getActivity(),android.R.layout.simple_list_item_1,devices);
+        lv.setAdapter(adapter);
+        alertDialog.setNegativeButton("Close", null);
+        alertDialog.show();
     }
 }
