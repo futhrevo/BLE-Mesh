@@ -33,6 +33,8 @@ import android.util.Base64;
 import android.util.Log;
 import android.view.MenuItem;
 import android.view.WindowManager;
+import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.Toast;
 
 import com.silabs.bluetooth_mesh.BluetoothMesh;
@@ -203,10 +205,12 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
                 netInfo.updateDeviceInfo(deviceInfo);
                 btmesh.saveNetworkDB(netInfo);
                 refreshHomeContent(netInfo);
+                showProxySuccessDialog();
             } else {
                 Log.e(TAG, "device info is null");
             }
             Log.d(TAG, " Got DCD : " + Converters.getHexValue(dcd));
+
         }
 
         @Override
@@ -299,15 +303,7 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
             super.didSuccessProvision(meshAddress, deviceUuid, status);
             Log.d(TAG, "BTMESH asking didSuccessProvision" + String.valueOf(status));
             if (status == 0) { // provison success
-                addDeviceInfo("test device", meshAddress, deviceUuid);
-                showDialog("Provisioning success", 500);
-                NPDViewModel npdViewModel = ViewModelProviders.of(MainActivity.this).get(NPDViewModel.class);
-                npdViewModel.deleteByMac(unProvDevice.getmac());
-                proxyDevice = new ProxyDevice(unProvDevice.getmac());
-                unProvDevice = null;
-                gotoHomeScreen();
-                showDialog("Connecting...", 5000);
-                handler.sendEmptyMessageDelayed(REQ_CONNECT_PROXY, 2000);
+                showProvisionSuccessDialog(meshAddress, deviceUuid);
 
             } else {
                 showDialog("Provisioning Failed", 500);
@@ -486,20 +482,23 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
     }
 
     @Override
-    public void onOffSet(DeviceInfo deviceInfo) {
+    public void onOffSet(DeviceInfo deviceInfo, GroupInfo grpInfo) {
         status = !status;
+        if(grpInfo == null) {
+            grpInfo = groupInfo;
+        }
         if(deviceInfo == null) {
             Log.d(TAG, "setting group message on");
-            btmesh.onOffSet(null, groupInfo, elementId, status, 100, 100, false, true);
+            btmesh.onOffSet(null, grpInfo, elementId, status, 100, 100, false, true);
             return;
         }
-        if (!groupInfo.devices().contains(deviceInfo)) {
+        if (!grpInfo.devices().contains(deviceInfo)) {
             Log.d(TAG, "device is not part of the group");
             return;
         }
         Log.d(TAG, "setting device on");
 
-        btmesh.onOffSet(deviceInfo, groupInfo, elementId, status, 100, 100, false, true);
+        btmesh.onOffSet(deviceInfo, grpInfo, elementId, status, 100, 100, false, true);
     }
 
     @Override
@@ -846,6 +845,56 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
         alertDialog.show();
     }
 
+    public void showProvisionSuccessDialog(final int meshAddress, final byte[] deviceUuid) {
+        AlertDialog.Builder alertDialog = new AlertDialog.Builder(this);
+        alertDialog.setTitle("Provision Success");
+        alertDialog.setMessage("Provide a name for this device");
+        final EditText input = new EditText(MainActivity.this);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.MATCH_PARENT);
+        input.setLayoutParams(lp);
+        alertDialog.setView(input);
+        alertDialog.setPositiveButton("OK", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                String deviceName = input.getText().toString();
+                addDeviceInfo(deviceName, meshAddress, deviceUuid);
+                NPDViewModel npdViewModel = ViewModelProviders.of(MainActivity.this).get(NPDViewModel.class);
+                npdViewModel.deleteByMac(unProvDevice.getmac());
+                proxyDevice = new ProxyDevice(unProvDevice.getmac());
+                unProvDevice = null;
+                gotoHomeScreen();
+                showDialog("Connecting as Proxy...", 5000);
+                handler.sendEmptyMessageDelayed(REQ_CONNECT_PROXY, 2000);
+            }
+        });
+        showDialog("Closing", 0);
+        alertDialog.show();
+    }
+
+    public void showProxySuccessDialog() {
+        AlertDialog.Builder alertDialog = new AlertDialog.Builder(this);
+        alertDialog.setTitle("Choose a group");
+
+        final ArrayList<GroupInfo> groupsInfo = netInfo.groupsInfo();
+        String[] groups = new String[groupsInfo.size()];
+        int index = 0;
+        for(GroupInfo grpInfo: groupsInfo) {
+            groups[index] = grpInfo.name();
+            index++;
+        }
+        alertDialog.setItems(groups, new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                addRemoveGroup(deviceInfo, groupsInfo.get(which));
+            }
+        });
+        // create and show the alert dialog
+        AlertDialog dialog = alertDialog.create();
+        showDialog("Closing", 0);
+        dialog.show();
+    }
     public class ConnectProxy implements ScannerInterface {
         public final String TAG = ScannerFragment.class.getSimpleName();
         private static final long SCAN_TIMEOUT = 5000;

@@ -271,7 +271,7 @@ public class HomeFragment extends Fragment {
 
     public void deviceAction(DeviceInfo deviceInfo) {
         Log.i(TAG, "User wants to on or off device");
-        callback.onOffSet(deviceInfo);
+        callback.onOffSet(deviceInfo, null);
     }
 
     public void addRemoveGroup(DeviceInfo deviceInfo) {
@@ -285,6 +285,6 @@ public class HomeFragment extends Fragment {
     }
 
     public void groupAction(GroupInfo groupInfo) {
-        callback.onOffSet(null);
+        callback.onOffSet(null, groupInfo);
     }
 }

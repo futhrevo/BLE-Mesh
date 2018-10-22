@@ -23,14 +23,14 @@ import java.util.ArrayList;
 import in.hedera.reku.swimclock.R;
 import in.hedera.reku.swimclock.utils.Constants;
 
-public class GroupListAdapter  extends RecyclerView.Adapter<GroupListAdapter.GroupListViewHolder> {
+public class GroupListAdapter extends RecyclerView.Adapter<GroupListAdapter.GroupListViewHolder> {
     public static final String TAG = GroupListAdapter.class.getSimpleName();
     private ArrayList<GroupInfo> groupsInfo;
     private final LayoutInflater inflater;
     private Context context;
     private HomeFragment fragment;
 
-    class GroupListViewHolder extends RecyclerView.ViewHolder implements View.OnClickListener{
+    class GroupListViewHolder extends RecyclerView.ViewHolder implements View.OnClickListener {
         private TextView grpName;
         private TextView grpCount;
         private LinearLayout grpItems;
@@ -48,7 +48,7 @@ public class GroupListAdapter  extends RecyclerView.Adapter<GroupListAdapter.Gro
                 int intMaxSizeTemp = groupsInfo.get(index).devicesList().size();
                 if (intMaxSizeTemp > intMaxNoOfChild) intMaxNoOfChild = intMaxSizeTemp;
             }
-            if(Constants.mock) {
+            if (Constants.mock) {
                 intMaxNoOfChild = 5;
             }
             for (int indexView = 0; indexView < intMaxNoOfChild; indexView++) {
@@ -68,7 +68,7 @@ public class GroupListAdapter  extends RecyclerView.Adapter<GroupListAdapter.Gro
         public void onClick(View view) {
             Log.d(TAG, "Clicked on group");
             if (view.getId() == R.id.group_name_item) {
-                if(grpItems.getVisibility() == View.VISIBLE) {
+                if (grpItems.getVisibility() == View.VISIBLE) {
                     grpItems.setVisibility(View.GONE);
                 } else {
                     grpItems.setVisibility(View.VISIBLE);
@@ -87,16 +87,16 @@ public class GroupListAdapter  extends RecyclerView.Adapter<GroupListAdapter.Gro
     @Override
     public GroupListViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int i) {
         Log.d(TAG, "onCreateViewHolder");
-        return new GroupListViewHolder(this.inflater.inflate(R.layout.list_group_item, parent,false));
+        return new GroupListViewHolder(this.inflater.inflate(R.layout.list_group_item, parent, false));
     }
 
     @Override
     public void onBindViewHolder(@NonNull final GroupListViewHolder holder, final int position) {
-        if(groupsInfo != null) {
-            GroupInfo groupInfo = groupsInfo.get(position);
+        if (groupsInfo != null) {
+            final GroupInfo groupInfo = groupsInfo.get(position);
             ArrayList<DeviceInfo> devicesList = groupInfo.devicesList();
-            if(Constants.mock) {
-                for (int  i = 0; i < 5; i++) {
+            if (Constants.mock) {
+                for (int i = 0; i < 5; i++) {
                     DeviceInfo deviceInfo = new DeviceInfo("Test" + String.valueOf(i), BluetoothMesh.randomGenerator(16));
                     devicesList.add(deviceInfo);
                 }
@@ -132,7 +132,7 @@ public class GroupListAdapter  extends RecyclerView.Adapter<GroupListAdapter.Gro
                         public boolean onMenuItemClick(MenuItem menuItem) {
                             switch (menuItem.getItemId()) {
                                 case R.id.menu_group_action:
-
+                                    fragment.groupAction(groupInfo);
                                     return true;
                             }
                             return false;
@@ -148,7 +148,7 @@ public class GroupListAdapter  extends RecyclerView.Adapter<GroupListAdapter.Gro
 
     @Override
     public int getItemCount() {
-        if(groupsInfo != null) {
+        if (groupsInfo != null) {
             return groupsInfo.size();
         }
         return 0;

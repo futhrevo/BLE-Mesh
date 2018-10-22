@@ -29,7 +29,7 @@ public interface FragListener {
 
     void addRemoveGroup(DeviceInfo deviceInfo, GroupInfo grpInfo);
 
-    void onOffSet(DeviceInfo deviceInfo);
+    void onOffSet(DeviceInfo deviceInfo, GroupInfo groupInfo);
 
     void factoryReset(DeviceInfo deviceInfo);
 }
