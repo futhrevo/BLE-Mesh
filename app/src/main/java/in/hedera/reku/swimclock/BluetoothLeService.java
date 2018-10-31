@@ -580,6 +580,41 @@ public class BluetoothLeService extends Service {
         return true;
     }
 
+    public boolean writeClockInChar(byte[] writeArray) {
+        Log.d(TAG, "Write to Mesh Proxy Service, meshProxyInCharacteristic");
+        if (writeArray.length > mtuSize) {
+            byte[][] chunks = sliceWrite(writeArray, mtuSize);
+            for (byte[] chunk : chunks) {
+                writeClockInCharIntl(chunk);
+            }
+            return true;
+        } else {
+            writeClockInCharIntl(writeArray);
+            return true;
+        }
+    }
+
+    private boolean writeClockInCharIntl(byte[] writeArray) {
+        if (mBluetoothGatt == null) {
+            Log.e(TAG, "writeGattChar : Device is not connected");
+            return false;
+        }
+        BluetoothGattService meshService = mBluetoothGatt.getService(Constants.CLOCK_SERVICE);
+        if (meshService == null) {
+            Log.e(TAG, "writeGattChar : Device does not contain meshProxyService");
+            return false;
+        }
+        BluetoothGattCharacteristic meshWrite = meshService.getCharacteristic(Constants.CLOCK_DATA_IN);
+        if (meshWrite == null) {
+            Log.e(TAG, "writeGattChar : Device does not contain meshProxyInCharacteristic");
+            return false;
+        }
+        meshWrite.setValue(writeArray);
+        meshWrite.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
+        writeCharacteristic(meshWrite);
+        return true;
+    }
+
     public boolean isConnected() {
         return mConnectionState == STATE_CONNECTED;
     }

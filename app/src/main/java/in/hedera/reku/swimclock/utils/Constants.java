@@ -3,6 +3,7 @@ package in.hedera.reku.swimclock.utils;
 import android.bluetooth.le.ScanResult;
 
 import java.util.Comparator;
+import java.util.UUID;
 
 public class Constants {
     public static final String HOME_TAG = "HOME";
@@ -63,6 +64,14 @@ public class Constants {
     public static final int REQ_CONNECT_GATT_PROXY = -1011;
     public static final int REQ_CONNECT_GATT_PROV = -1012;
     public static final int REQ_CONNECT_HIGH_RSSI = -1020;
+
+    public static final UUID CLOCK_SERVICE = UUID.fromString("7b529ce2-7f6c-4064-a770-9d6ce5ab229b");
+    // data out read
+    public static final UUID CLOCK_DATA_OUT = UUID.fromString("899535e9-75c1-45e8-9bbc-4825d1713241");
+    // data in write without response
+    public static final UUID CLOCK_DATA_IN = UUID.fromString("d6edad98-5573-4e8c-b697-e2aafe95de19");
+
+    public static final boolean mock = false;
 
 
     public static byte[][] sliceWrite(byte[] writeArray, int mtuSize) {

@@ -4,22 +4,24 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    tools:context=".scanner.ScannerFragment">
+    tools:context=".scanner.ScannerFragment"
+    android:background="@color/colorBackground">
 
     <ProgressBar
+        android:id="@+id/progress_bar_scan"
         style="@style/Widget.AppCompat.ProgressBar.Horizontal"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="-7dp"
         android:indeterminate="true"
         android:visibility="gone"
-        android:id="@+id/progress_bar_scan" />
+        tools:visibility="visible" />
 
     <android.support.v7.widget.RecyclerView
         android:id="@+id/deviceList"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_margin="10dp"
-        android:paddingLeft="20dp"
         android:visibility="gone"
         tools:listitem="@layout/scan_list_item"
         tools:visibility="gone"/>

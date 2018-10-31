@@ -16,21 +16,26 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ListView;
 import android.widget.ProgressBar;
 import android.widget.RadioGroup;
 import android.widget.TextView;
 
+import com.silabs.bluetooth_mesh.BluetoothMesh;
 import com.silabs.bluetooth_mesh.DeviceInfo;
+import com.silabs.bluetooth_mesh.GroupInfo;
 import com.silabs.bluetooth_mesh.NetworkInfo;
+
+import java.util.ArrayList;
 
 import in.hedera.reku.swimclock.FragListener;
 import in.hedera.reku.swimclock.MainActivity;
 import in.hedera.reku.swimclock.R;
-import in.hedera.reku.swimclock.scanner.ClickListener;
-import in.hedera.reku.swimclock.utils.RecyclerTouchListener;
+import in.hedera.reku.swimclock.utils.Constants;
 
 /**
  * A simple {@link Fragment} subclass.
@@ -130,49 +135,28 @@ public class HomeFragment extends Fragment {
     }
 
     private void setupGroupsRecycler() {
-        groupsAdapter = new GroupListAdapter(getContext());
+        groupsAdapter = new GroupListAdapter(getContext(), HomeFragment.this);
         groupsRecyclerView.setAdapter(groupsAdapter);
         groupsRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
-        groupsRecyclerView.addOnItemTouchListener(
-                new RecyclerTouchListener(getContext(), groupsRecyclerView, new ClickListener() {
-                    @Override
-                    public void onClick(View view, int position) {
-                        Log.d(TAG, "Group clicked at " + position + " do on off");
-                        callback.onOffSet(null);
-                    }
-
-                    @Override
-                    public void onLongClick(View view, int position) {
-                        Log.d(TAG, "group long clicked at  " + position);
-                    }
-                }));
+//        groupsRecyclerView.addOnItemTouchListener(
+//                new RecyclerTouchListener(getContext(), groupsRecyclerView, new ClickListener() {
+//                    @Override
+//                    public void onClick(View view, int position) {
+//                        Log.d(TAG, "Group clicked at " + position + " do on off");
+//                        callback.onOffSet(null);
+//                    }
+//
+//                    @Override
+//                    public void onLongClick(View view, int position) {
+//                        Log.d(TAG, "group long clicked at  " + position);
+//                    }
+//                }));
     }
 
     private void setUpDeviceRecycler() {
-        devicesAdapter = new DeviceListAdapter(getContext());
+        devicesAdapter = new DeviceListAdapter(getContext(), HomeFragment.this);
         devicesRecyclerView.setAdapter(devicesAdapter);
         devicesRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
-        devicesRecyclerView.addOnItemTouchListener(
-                new RecyclerTouchListener(getContext(), this.devicesRecyclerView, new ClickListener() {
-                    @Override
-                    public void onClick(View view, int position) {
-                        DeviceInfo deviceInfo = HomeFragment.this.devicesAdapter.getItemAtPosition(position);
-                        String str = HomeFragment.TAG;
-                        StringBuilder stringBuilder = new StringBuilder();
-                        stringBuilder.append("item clicked at ");
-                        stringBuilder.append(deviceInfo.name());
-                        Log.d(str, stringBuilder.toString());
-                        Log.i(TAG, "User wants to on or off device");
-                        callback.onOffSet(deviceInfo);
-                    }
-
-                    @Override
-                    public void onLongClick(View view, int position) {
-                        Log.d(HomeFragment.TAG, "item long clicked, add/ remove group");
-                        DeviceInfo deviceInfo = devicesAdapter.getItemAtPosition(position);
-                        callback.addRemoveGroup(deviceInfo);
-                    }
-                }));
     }
 
     @Override
@@ -260,6 +244,14 @@ public class HomeFragment extends Fragment {
     }
     public void showNetInfo(NetworkInfo networkInfo) {
         this.networkInfo = networkInfo;
+        if(Constants.mock) {
+            GroupInfo groupInfo = networkInfo.groupById(0);
+            for (int  i = 0; i < 5; i++) {
+                DeviceInfo deviceInfo = new DeviceInfo("Test" + String.valueOf(i), BluetoothMesh.randomGenerator(16));
+                deviceInfo.addToNetwork(networkInfo, i);
+                networkInfo.addDevice(deviceInfo);
+            }
+        }
         if (networkInfo == null) {
             showEmptyLayout(true);
         } else {
@@ -279,5 +271,51 @@ public class HomeFragment extends Fragment {
                 groupsAdapter.setGroups(networkInfo.groupsInfo());
             }
         }
+    }
+
+    public void deviceAction(DeviceInfo deviceInfo) {
+        Log.i(TAG, "User wants to on or off device");
+        callback.onOffSet(deviceInfo, null);
+    }
+
+    public void addRemoveGroup(DeviceInfo deviceInfo) {
+        Log.d(HomeFragment.TAG, "add/ remove group");
+        callback.addRemoveGroup(deviceInfo, null);
+    }
+
+    public void factoryReset(DeviceInfo deviceInfo) {
+        Log.d(HomeFragment.TAG, "Factory reset device");
+        callback.factoryReset(deviceInfo);
+    }
+
+    public void groupAction(GroupInfo groupInfo) {
+        callback.onOffSet(null, groupInfo);
+    }
+
+    public void listGroupDevices(GroupInfo groupInfo) {
+        AlertDialog.Builder alertDialog = new AlertDialog.Builder(getActivity());
+        alertDialog.setTitle("Devices List");
+        LayoutInflater inflater = getLayoutInflater();
+        View convertView = (View) inflater.inflate(R.layout.list_group_devices, null);
+        alertDialog.setView(convertView);
+        ListView lv = (ListView) convertView.findViewById(R.id.list_group_devices);
+        ArrayList<DeviceInfo> devicesList = groupInfo.devicesList();
+        if (Constants.mock) {
+            for (int i = 0; i < 20; i++) {
+                DeviceInfo deviceInfo = new DeviceInfo("Test" + String.valueOf(i), BluetoothMesh.randomGenerator(16));
+                devicesList.add(deviceInfo);
+            }
+        }
+        String[] devices = new String[devicesList.size()];
+        int index = 0;
+        for(DeviceInfo dvInfo: devicesList) {
+            devices[index] = dvInfo.name();
+            index++;
+        }
+
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(getActivity(),android.R.layout.simple_list_item_1,devices);
+        lv.setAdapter(adapter);
+        alertDialog.setNegativeButton("Close", null);
+        alertDialog.show();
     }
 }
