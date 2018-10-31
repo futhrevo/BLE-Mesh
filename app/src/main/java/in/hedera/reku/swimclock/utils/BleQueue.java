@@ -26,7 +26,7 @@ public class BleQueue {
 
     public void onDescriptorWrite(BluetoothGatt gatt,
                                   BluetoothGattDescriptor descriptor, int status) {
-        bleQueue.remove();
+        bleQueue.poll();
         nextAction();
     }
 
@@ -38,7 +38,7 @@ public class BleQueue {
 
     public void onCharacteristicRead(BluetoothGatt gatt,
                                      BluetoothGattCharacteristic characteristic, int status) {
-        bleQueue.remove();
+        bleQueue.poll();
         nextAction();
     }
 
@@ -48,7 +48,7 @@ public class BleQueue {
 
     public void onCharacteristicWrite(BluetoothGatt gatt,
                                       BluetoothGattCharacteristic characteristic, int status) {
-        bleQueue.remove();
+        bleQueue.poll();
         nextAction();
     }
 
@@ -57,7 +57,7 @@ public class BleQueue {
     }
 
     public void onMtuChanged(BluetoothGatt gatt, int mtu, int status) {
-        bleQueue.remove();
+        bleQueue.poll();
         nextAction();
     }
 
@@ -93,7 +93,7 @@ public class BleQueue {
                             .getObject());
         } else if (ActionType.connectionPriority.equals(action.getType())) {
             mBluetoothGatt.requestConnectionPriority((Integer) action.getObject());
-            bleQueue.remove();
+            bleQueue.poll();
             nextAction();
         } else if (ActionType.requestMtu.equals(action.getType())) {
             mBluetoothGatt.requestMtu((int) action.getObject());

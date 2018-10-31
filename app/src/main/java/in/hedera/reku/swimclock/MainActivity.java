@@ -487,18 +487,28 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
         if(grpInfo == null) {
             grpInfo = groupInfo;
         }
-        if(deviceInfo == null) {
-            Log.d(TAG, "setting group message on");
-            btmesh.onOffSet(null, grpInfo, elementId, status, 100, 100, false, true);
-            return;
-        }
-        if (!grpInfo.devices().contains(deviceInfo)) {
-            Log.d(TAG, "device is not part of the group");
-            return;
-        }
+//        if(deviceInfo == null) {
+//            Log.d(TAG, "setting group message on");
+////            btmesh.onOffSet(null, grpInfo, elementId, status, 100, 100, false, true);
+////            return;
+//        }
+//        if (!grpInfo.devices().contains(deviceInfo)) {
+//            Log.d(TAG, "device is not part of the group");
+//            return;
+//        }
         Log.d(TAG, "setting device on");
-
-        btmesh.onOffSet(deviceInfo, grpInfo, elementId, status, 100, 100, false, true);
+//        btmesh.onOffSet(deviceInfo, grpInfo, elementId, status, 100, 100, false, true);
+        final EditText taskEditText = new EditText(this);
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Send Message to network").setMessage("Write here in hex")
+                .setView(taskEditText).setPositiveButton("Create", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        String task = String.valueOf(taskEditText.getText());
+                        byte[] bytes = Converters.hexToByteArray(task);
+                        bleService.writeClockInChar(bytes);
+                    }
+                }).setNegativeButton("Cancel", null).create();
+        dialog.show();
     }
 
     @Override
@@ -644,7 +654,7 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
                 }
 
                 proxyDevice = null;
-                unProvDevice = null;
+//                unProvDevice = null;
 
 
             } else if (Constants.ACTION_GATT_SERVICES_DISCOVERED.equals(action)) {
