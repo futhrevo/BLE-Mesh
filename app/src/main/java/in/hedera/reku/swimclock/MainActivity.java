@@ -49,6 +49,7 @@ import com.silabs.bluetooth_mesh.Utils.Converters;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.TimeZone;
 import java.util.UUID;
 
 import de.halfbit.tinymachine.StateHandler;
@@ -118,6 +119,7 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
     private Model onoffmodel = new Model(false, -1412627713, "Vendor");
     private int elementId = 0;
     private boolean status = false;
+    private boolean isScanning = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -205,6 +207,7 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
                 netInfo.updateDeviceInfo(deviceInfo);
                 btmesh.saveNetworkDB(netInfo);
                 refreshHomeContent(netInfo);
+                setProxy(deviceInfo);
                 showProxySuccessDialog();
             } else {
                 Log.e(TAG, "device info is null");
@@ -227,8 +230,9 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
                 }
             }
             if (deviceInfo != null) {
-                Log.d(TAG, "APP replied with DCDRequest with handle: " + gattHandle + " in 0.5 seconds");
-                handler.sendEmptyMessageDelayed(REQ_DCD, 500);
+                      Log.d(TAG, "APP replied with DCDRequest with handle: " + gattHandle + " in 0.5 seconds");
+                    handler.sendEmptyMessageDelayed(REQ_DCD, 500);
+
             }
         }
 
@@ -427,8 +431,12 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
     @Override
     public void connectNetwork() {
         if (!bleService.isConnected()) {
-            showDialog("Identifying Proxy..", 10000);
-            handler.sendEmptyMessageDelayed(REQ_CONNECT_PROXY, 300);
+            if(!isScanning) {
+                showDialog("Identifying Proxy..", 10000);
+                handler.sendEmptyMessageDelayed(REQ_CONNECT_PROXY, 300);
+            } else {
+                Log.i(TAG, "Proxy scan already in progress");
+            }
         } else {
             Log.e(TAG, "BLE is already connected with gattHandle : " + String.valueOf(bleService.gattHandle));
         }
@@ -504,7 +512,12 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
                         String task = String.valueOf(taskEditText.getText());
-                        byte[] bytes = Converters.hexToByteArray(task);
+                        Log.d(TAG, "opcode: " + task);
+                        long tz = TimeZone.getDefault().getOffset(System.currentTimeMillis());
+                        String time = Long.toHexString(System.currentTimeMillis() + tz);
+                        Log.d(TAG, "local time : " + time);
+                        byte[] bytes = Converters.hexToByteArray(time + task);
+                        Log.d(TAG, "bytes : " + Converters.getHexValue(bytes));
                         bleService.writeClockInChar(bytes);
                     }
                 }).setNegativeButton("Cancel", null).create();
@@ -528,7 +541,12 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
                 break;
 
             case REQ_CONNECT_PROXY:
-                new ConnectProxy(getApplicationContext());
+                if(!isScanning) {
+                    new ConnectProxy(getApplicationContext());
+                } else {
+                    Log.i(TAG, "Proxy scan already in progress");
+                }
+
                 break;
 
             case REQ_HIDE_DIALOG:
@@ -552,8 +570,12 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
     }
 
     private void requestDCD() {
-        btmesh.DCDRequest(deviceInfo);
-        proxyMachine.transitionTo(PROXY_DCD);
+        if(deviceInfo.dcd() == null) {
+            btmesh.DCDRequest(deviceInfo);
+            proxyMachine.transitionTo(PROXY_DCD);
+        }else {
+            proxyMachine.transitionTo(PROXY_READY);
+        }
         // deviceInfo = null;
     }
 
@@ -680,10 +702,11 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
             } else if (Constants.ACTION_GATT_SERVICES_ERROR.equals(action)) {
                 provisionMachine.transitionTo(PROVISION_INIT);
                 proxyMachine.transitionTo(PROXY_INIT);
-                showDialog("GATT Error", 2000);
+                showDialog("GATT Error, Reconnecting..", 2000);
                 if (btmesh != null && btmesh.isConnected()) {
                     btmesh.disconnectGatt(handle);
                 }
+                connectNetwork();
             } else if (Constants.ACTION_MTU_CHANGED.equals(action)) {
 
             } else if (Constants.ACTION_CHARACTERISTIC_WRITE.equals(action)) {
@@ -927,11 +950,13 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
 
         @Override
         public void scanningStarted() {
+            isScanning = true;
             showDialog("Scanning", 60000);
         }
 
         @Override
         public void scanningStopped() {
+            isScanning = false;
             showDialog("Stopping scan", 3000);
         }
 
@@ -943,6 +968,7 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
 
             boolean idMatch = false;
             boolean netMatch = false;
+            isScanning = false;
             ParcelUuid meshProxyServ = ParcelUuid.fromString(BluetoothMesh.meshProxyService.toString());
             // NetworkInfo netInfo = btmesh.getNetworkDB().get(0);
             if (result.getScanRecord() != null && result.getScanRecord().getServiceUuids() != null

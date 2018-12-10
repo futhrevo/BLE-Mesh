@@ -92,20 +92,19 @@ public class BluetoothLeService extends Service {
                             return;
                     }
 
-                case 8:
+                case 8: // Device went out of range
                     intentAction = Constants.ACTION_GATT_SERVICES_ERROR;
                     mConnectionState = STATE_DISCONNECTED;
                     Log.i(TAG, "Gatt server error, status: " + status + ", newState: " + newState);
                     broadcastUpdate(intentAction);
                     return;
-                case 133:
+                case 133: // Device not found - 133(some phone it gives 62)
                     error_handler++;
                     mConnectionState = STATE_DISCONNECTED;
                     if(error_handler > 2) {
                         intentAction = Constants.ACTION_GATT_SERVICES_ERROR;
                         Log.i(TAG, "Gatt server error, status: " + status + ", newState: " + newState);
                         broadcastUpdate(intentAction);
-
                         return;
                     }
                     gatt.connect();

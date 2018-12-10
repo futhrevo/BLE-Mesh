@@ -65,11 +65,11 @@ public class Constants {
     public static final int REQ_CONNECT_GATT_PROV = -1012;
     public static final int REQ_CONNECT_HIGH_RSSI = -1020;
 
-    public static final UUID CLOCK_SERVICE = UUID.fromString("7b529ce2-7f6c-4064-a770-9d6ce5ab229b");
+    public static final UUID CLOCK_SERVICE = UUID.fromString("264ca5dc-3364-46df-8039-8c7b33664238");
     // data out read
-    public static final UUID CLOCK_DATA_OUT = UUID.fromString("899535e9-75c1-45e8-9bbc-4825d1713241");
+    public static final UUID CLOCK_DATA_OUT = UUID.fromString("fca84d2f-d134-4e33-a53a-99c4b7ec7219");
     // data in write without response
-    public static final UUID CLOCK_DATA_IN = UUID.fromString("d6edad98-5573-4e8c-b697-e2aafe95de19");
+    public static final UUID CLOCK_DATA_IN = UUID.fromString("f8c82543-fb49-4234-a193-e105344c585f");
 
     public static final boolean mock = false;
 
