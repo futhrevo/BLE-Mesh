@@ -20,4 +20,12 @@
     <string name="add_remove_to_group">Add/Remove to Group</string>
     <string name="factory_reset">Factory Reset</string>
     <string name="group_action">Action</string>
+    <string name="power">Power</string>
+    <string name="reset">Reset</string>
+    <string name="real_time">Real Time</string>
+    <string name="set">+Set</string>
+    <string name="ladder">Ladder</string>
+    <string name="pause">Pause</string>
+    <string name="clock">Clock</string>
+    <string name="practice">Practice</string>
 </resources>

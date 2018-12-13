@@ -9,6 +9,7 @@ public class Constants {
     public static final String HOME_TAG = "HOME";
     public static final String SCAN_TAG = "SCAN";
     public static final String SETTINGS_TAG = "SETTINGS";
+    public static final String CLOCK_TAG = "CLOCK_TAG";
     public static final String SCANNING = "Scanning";
     public static final int SCAN_TIMEOUT = 5;
 

@@ -54,6 +54,7 @@ import java.util.UUID;
 
 import de.halfbit.tinymachine.StateHandler;
 import de.halfbit.tinymachine.TinyMachine;
+import in.hedera.reku.swimclock.clock.ClockFragment;
 import in.hedera.reku.swimclock.home.HomeFragment;
 import in.hedera.reku.swimclock.scanner.BleScanner;
 import in.hedera.reku.swimclock.scanner.NPDViewModel;
@@ -770,6 +771,11 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
                 case R.id.navigation_settings:
                     fragment = new SettingsFragment();
                     tag = Constants.SETTINGS_TAG;
+                    break;
+
+                case R.id.navigation_clock:
+                    fragment = new ClockFragment();
+                    tag = Constants.CLOCK_TAG;
                     break;
             }
             return loadFragment(fragment, tag);
