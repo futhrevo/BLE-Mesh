@@ -74,6 +74,9 @@ public class Constants {
 
     public static final boolean mock = false;
 
+    public static final String BTN_START = "START";
+    public static final String BTN_PAUSE = "PAUSE";
+    public static final String BTN_RESUME = "RESUME";
 
     public static byte[][] sliceWrite(byte[] writeArray, int mtuSize) {
         int len = writeArray.length;

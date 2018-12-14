@@ -25,7 +25,8 @@
     <string name="real_time">Real Time</string>
     <string name="set">+Set</string>
     <string name="ladder">Ladder</string>
-    <string name="pause">Pause</string>
+    <string name="pause">START</string>
     <string name="clock">Clock</string>
     <string name="practice">Practice</string>
+    <string name="buzzer">Buzzer</string>
 </resources>

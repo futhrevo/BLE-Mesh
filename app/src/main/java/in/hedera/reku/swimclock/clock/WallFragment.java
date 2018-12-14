@@ -1,12 +1,21 @@
 package in.hedera.reku.swimclock.clock;
 
 
+import android.content.Context;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
 import android.support.v4.app.Fragment;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.TextView;
 
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+
+import in.hedera.reku.swimclock.FragListener;
+import in.hedera.reku.swimclock.MainActivity;
 import in.hedera.reku.swimclock.R;
 
 /**
@@ -14,17 +23,61 @@ import in.hedera.reku.swimclock.R;
  */
 public class WallFragment extends Fragment {
 
+    public static final String TAG = WallFragment.class.getSimpleName();
+    FragListener callback;
+    private Calendar mTime;
+    SimpleDateFormat formatter = new SimpleDateFormat("HH:mm:ss");
+    TextView timeview;
+    private boolean mRunning = true;
+    private static final int TICK_WHAT = 2;
 
     public WallFragment() {
         // Required empty public constructor
+    }
+
+    @Override
+    public void onAttach(Context context) {
+        super.onAttach(context);
+        try {
+            callback = (MainActivity) context;
+        } catch (ClassCastException e) {
+            throw new ClassCastException(context.toString() + " must implement FragListener");
+        }
     }
 
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
+        callback.sendOpcode("03");
         // Inflate the layout for this fragment
-        return inflater.inflate(R.layout.fragment_wall, container, false);
+        View rootView = inflater.inflate(R.layout.fragment_wall, container, false);
+        timeview = rootView.findViewById(R.id.timeview);
+        mTime = Calendar.getInstance();
+        mHandler.sendMessageDelayed(Message.obtain(mHandler,
+                TICK_WHAT), 100);
+        return rootView;
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        mHandler.removeMessages(TICK_WHAT);
+    }
+
+    private Handler mHandler = new Handler() {
+        public void handleMessage(Message m) {
+            if (mRunning) {
+                updateTime();
+                sendMessageDelayed(Message.obtain(this , TICK_WHAT),
+                        1000);
+            }
+        }
+    };
+
+    private void updateTime() {
+        mTime.setTimeInMillis(System.currentTimeMillis());
+        timeview.setText(formatter.format(mTime.getTime()));
     }
 
 }

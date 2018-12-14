@@ -20,16 +20,15 @@
         android:paddingTop="24dp"
         android:paddingBottom="24dp">
 
-        <TextClock
+        <TextView
             android:id="@+id/timeview"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_centerHorizontal="true"
-            android:format24Hour="HH:mm:ss"
-            android:format12Hour="@null"
             android:textColor="@android:color/white"
-            android:textSize="64sp"
+            android:textSize="48sp"
             android:textStyle="bold"
+            android:text="--:--"
             tools:text="12:05:08" />
     </RelativeLayout>
 

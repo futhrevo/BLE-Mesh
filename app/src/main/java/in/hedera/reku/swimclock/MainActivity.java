@@ -513,13 +513,7 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
                         String task = String.valueOf(taskEditText.getText());
-                        Log.d(TAG, "opcode: " + task);
-                        long tz = TimeZone.getDefault().getOffset(System.currentTimeMillis());
-                        String time = Long.toHexString(System.currentTimeMillis() + tz);
-                        Log.d(TAG, "local time : " + time);
-                        byte[] bytes = Converters.hexToByteArray(time + task);
-                        Log.d(TAG, "bytes : " + Converters.getHexValue(bytes));
-                        bleService.writeClockInChar(bytes);
+                        sendOpcode(task);
                     }
                 }).setNegativeButton("Cancel", null).create();
         dialog.show();
@@ -531,6 +525,21 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
             btmesh.factoryResetDevice(deviceInfo, netInfo);
             showDialog("Factory Reset", 10000);
             return;
+        }
+    }
+
+    @Override
+    public void sendOpcode(String opcode) {
+        if(bleService != null && bleService.isConnected() && bleService.gattHandle == Constants.HANDLE_PROXY) {
+            Log.d(TAG, "opcode: " + opcode);
+            long tz = TimeZone.getDefault().getOffset(System.currentTimeMillis());
+            String time = Long.toHexString(System.currentTimeMillis() + tz);
+            Log.d(TAG, "local time : " + time);
+            byte[] bytes = Converters.hexToByteArray(time + opcode);
+            Log.d(TAG, "bytes : " + Converters.getHexValue(bytes));
+            bleService.writeClockInChar(bytes);
+        } else {
+            Log.i(TAG, "unable to send opcode: " + opcode);
         }
     }
 
@@ -776,6 +785,7 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
                 case R.id.navigation_clock:
                     fragment = new ClockFragment();
                     tag = Constants.CLOCK_TAG;
+                    sendOpcode("07");
                     break;
             }
             return loadFragment(fragment, tag);

@@ -7,22 +7,21 @@ import android.support.v4.app.Fragment;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 
 import in.hedera.reku.swimclock.FragListener;
 import in.hedera.reku.swimclock.MainActivity;
 import in.hedera.reku.swimclock.R;
-import in.hedera.reku.swimclock.utils.Chronometer;
 
 /**
  * A simple {@link Fragment} subclass.
  */
-public class PaceFragment extends Fragment {
-    public static final String TAG = PaceFragment.class.getSimpleName();
+public class MLapFragment extends Fragment {
+    public static final String TAG = MLapFragment.class.getSimpleName();
 
     FragListener callback;
-    private Chronometer chronometer;
 
-    public PaceFragment() {
+    public MLapFragment() {
         // Required empty public constructor
     }
 
@@ -39,11 +38,25 @@ public class PaceFragment extends Fragment {
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
-        // Inflate the layout for this fragment
-        View rootView = inflater.inflate(R.layout.fragment_pace, container, false);
-        chronometer = rootView.findViewById(R.id.timeview);
         callback.sendOpcode("02");
-        chronometer.start();
+
+        View rootView = inflater.inflate(R.layout.fragment_mlap, container, false);
+
+        Button resetBtn = rootView.findViewById(R.id.reset_btn);
+        resetBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                callback.sendOpcode("06");
+            }
+        });
+        Button rtcBtn = rootView.findViewById(R.id.real_time_btn);
+        rtcBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                callback.sendOpcode("07");
+            }
+        });
+        // Inflate the layout for this fragment
         return rootView;
     }
 
