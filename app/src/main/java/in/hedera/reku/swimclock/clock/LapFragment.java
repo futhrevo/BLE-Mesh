@@ -40,6 +40,7 @@ public class LapFragment extends Fragment {
     private EditText etIntSec;
     private EditText etIntms;
     private TextView timeview;
+    private TextView repInfo;
     private int laps;
     private int currentlap;
     private long timeWhenPaused = 0;
@@ -132,6 +133,7 @@ public class LapFragment extends Fragment {
             }
         });
         timeview = rootView.findViewById(R.id.timeview);
+        repInfo = rootView.findViewById(R.id.rep_info);
 //        chronometer = rootView.findViewById(R.id.timeview);
 //        chronometer.setOnChronometerTickListener(new Chronometer.OnChronometerTickListener() {
 //            @Override
@@ -229,6 +231,7 @@ public class LapFragment extends Fragment {
     public Runnable uprunnable = new Runnable() {
         @Override
         public void run() {
+            repInfo.setText("[1] - " + String.valueOf(currentlap + 1));
             MillisecondTime = SystemClock.uptimeMillis() - StartTime;
 
             UpdateTime = TimeBuff + MillisecondTime;
@@ -241,10 +244,12 @@ public class LapFragment extends Fragment {
                 resetRunnable();
                 StartTime = SystemClock.uptimeMillis();
                 if (laps > currentlap) {
+                    repInfo.setText("[1] - " + String.valueOf(currentlap));
                     handler.postDelayed(this, 0);
                 } else {
                     handler.removeCallbacks(uprunnable);
                     currentlap = 0;
+                    repInfo.setText("");
                     actionBtn.setText(Constants.BTN_START);
                 }
             }else {
@@ -257,6 +262,7 @@ public class LapFragment extends Fragment {
     public Runnable downRunnable = new Runnable() {
         @Override
         public void run() {
+            repInfo.setText("[1] - " + String.valueOf(currentlap + 1));
             MillisecondTime = StartTime - SystemClock.uptimeMillis();
             UpdateTime = TimeBuff + MillisecondTime;
             updateTimeView(UpdateTime);
@@ -266,10 +272,12 @@ public class LapFragment extends Fragment {
                 StartTime = SystemClock.uptimeMillis() + lapSet.getTotalMills();
                 Log.d(TAG, String.valueOf(currentlap) + " <- " + String.valueOf(laps));
                 if (laps > currentlap) {
+
                     handler.postDelayed(this, 0);
                 } else {
                     handler.removeCallbacks(uprunnable);
                     currentlap = 0;
+                    repInfo.setText("");
                     actionBtn.setText(Constants.BTN_START);
                 }
             } else {

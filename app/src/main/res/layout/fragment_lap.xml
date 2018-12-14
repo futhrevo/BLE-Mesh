@@ -149,31 +149,5 @@
             android:textColor="@android:color/white"
             android:textStyle="bold" />
 
-        <ImageButton
-            android:id="@+id/lap_up_btn"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:layout_above="@+id/time_pause"
-            android:layout_alignParentEnd="true"
-            android:layout_marginEnd="15dp"
-            android:layout_marginBottom="6dp"
-            android:background="@drawable/menu_up"
-            android:elevation="8dp"
-            android:scaleType="fitXY"
-            android:scaleX="1.5"
-            android:scaleY="1.5" />
-
-        <ImageButton
-            android:id="@+id/lap_down_btn"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:layout_alignTop="@+id/time_pause"
-            android:layout_alignParentEnd="true"
-            android:layout_marginEnd="15dp"
-            android:background="@drawable/menu_down"
-            android:elevation="8dp"
-            android:scaleType="fitXY"
-            android:scaleX="1.5"
-            android:scaleY="1.5" />
     </RelativeLayout>
 </LinearLayout>
