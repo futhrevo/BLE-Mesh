@@ -1,11 +1,13 @@
 package in.hedera.reku.swimclock.utils;
 
+import java.io.Serializable;
+
 /**
  * Created by rakeshkalyankar on 14/12/18.
  * Contact k.rakeshlal@gmail.com for licence
  */
-public class LapSet {
-
+public class LapSet implements Serializable {
+    private static final long serialVersionUID = -5963670920408756945L;
     private Integer minute;
     private Integer second;
     private Integer milliseconds;

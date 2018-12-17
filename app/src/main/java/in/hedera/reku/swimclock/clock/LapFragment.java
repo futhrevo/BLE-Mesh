@@ -43,13 +43,11 @@ public class LapFragment extends Fragment {
     private TextView repInfo;
     private int laps;
     private int currentlap;
-    private long timeWhenPaused = 0;
+    private boolean isCountdownTimer = false;
 
     long MillisecondTime, StartTime, TimeBuff, UpdateTime = 0L;
 
     Handler handler;
-
-//    private Chronometer chronometer;
 
     public LapFragment() {
         // Required empty public constructor
@@ -68,7 +66,6 @@ public class LapFragment extends Fragment {
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
-        callback.sendOpcode("02");
         lapSet = new LapSet();
         handler = new Handler() ;
         View rootView = inflater.inflate(R.layout.fragment_lap, container, false);
@@ -134,18 +131,6 @@ public class LapFragment extends Fragment {
         });
         timeview = rootView.findViewById(R.id.timeview);
         repInfo = rootView.findViewById(R.id.rep_info);
-//        chronometer = rootView.findViewById(R.id.timeview);
-//        chronometer.setOnChronometerTickListener(new Chronometer.OnChronometerTickListener() {
-//            @Override
-//            public void onChronometerTick(Chronometer chronometer) {
-//                if (chronometer.getTimeElapsed() > lapSet.getTotalMills()) {
-//                    chronometer.stop();
-//                    // make this as runnable with delay
-//                    restartCounter();
-//
-//                }
-//            }
-//        });
         return rootView;
     }
 
@@ -157,9 +142,9 @@ public class LapFragment extends Fragment {
         callback.sendOpcode("04" + ld + lapSet.getLapcount() + lapSet.getMillisHex());
         laps = lapSet.getlapcountInt();
         currentlap = 0;
-//        chronometer.setBase(SystemClock.elapsedRealtime());
-//        chronometer.start();
-        if(ld.equals("00")) {
+        isCountdownTimer = ld.equals("00");
+        callback.sendOpcode("0902");
+        if(isCountdownTimer) {
             StartTime = SystemClock.uptimeMillis() + lapSet.getTotalMills();
             handler.postDelayed(downRunnable, 0);
         } else {
@@ -171,30 +156,34 @@ public class LapFragment extends Fragment {
 
     private void pauseLaps() {
         callback.sendOpcode("0501");
-//        timeWhenPaused = chronometer.getBase() - SystemClock.elapsedRealtime();
-//        chronometer.stop();
         TimeBuff += MillisecondTime;
 
         handler.removeCallbacks(uprunnable);
+        handler.removeCallbacks(downRunnable);
 
         actionBtn.setText(Constants.BTN_RESUME);
     }
 
     private void resumeLaps() {
         callback.sendOpcode("0500");
-//        chronometer.setBase(SystemClock.elapsedRealtime() + timeWhenPaused);
-//        chronometer.start();
-        StartTime = SystemClock.uptimeMillis();
-        handler.postDelayed(uprunnable, 0);
+        if(isCountdownTimer) {
+            StartTime = SystemClock.uptimeMillis() + MillisecondTime;
+            handler.postDelayed(downRunnable, 0);
+        } else {
+            StartTime = SystemClock.uptimeMillis();
+            handler.postDelayed(uprunnable, 0);
+        }
         actionBtn.setText(Constants.BTN_PAUSE);
     }
 
     private void resetLaps() {
+        callback.sendOpcode("0903");
         callback.sendOpcode("06");
         actionBtn.setText(Constants.BTN_START);
-//        chronometer.stop();
-//        chronometer.setBase(SystemClock.elapsedRealtime());
         handler.removeCallbacks(uprunnable);
+        handler.removeCallbacks(downRunnable);
+        resetRunnable();
+        repInfo.setText("");
     }
 
     private void resetRunnable() {
@@ -202,16 +191,7 @@ public class LapFragment extends Fragment {
         StartTime = 0L ;
         TimeBuff = 0L ;
         UpdateTime = 0L ;
-        timeview.setText("00:00.00");
-    }
-
-    public void restartCounter() {
-        currentlap++;
-        Log.d(TAG, String.valueOf(currentlap));
-        if (laps >= currentlap) {
-//            chronometer.setBase(SystemClock.elapsedRealtime());
-//            chronometer.start();
-        }
+        timeview.setText("00:00.000");
     }
 
     public void updateTimeView(long millis) {
@@ -223,7 +203,7 @@ public class LapFragment extends Fragment {
 
         int MilliSeconds = (int) (millis % 1000);
 
-        timeview.setText("" + Minutes + ":"
+        timeview.setText("" + String.format("%02d", Minutes) + ":"
                 + String.format("%02d", Seconds) + ":"
                 + String.format("%03d", MilliSeconds));
     }
@@ -238,18 +218,18 @@ public class LapFragment extends Fragment {
 
             updateTimeView(UpdateTime);
 
-            if (MillisecondTime > lapSet.getTotalMills()) {
+            if (UpdateTime > lapSet.getTotalMills()) {
                 currentlap++;
                 Log.d(TAG, String.valueOf(currentlap) + " <- " + String.valueOf(laps));
-                resetRunnable();
-                StartTime = SystemClock.uptimeMillis();
                 if (laps > currentlap) {
+                    resetRunnable();
+                    StartTime = SystemClock.uptimeMillis();
                     repInfo.setText("[1] - " + String.valueOf(currentlap));
                     handler.postDelayed(this, 0);
                 } else {
                     handler.removeCallbacks(uprunnable);
                     currentlap = 0;
-                    repInfo.setText("");
+//                    repInfo.setText("");
                     actionBtn.setText(Constants.BTN_START);
                 }
             }else {
@@ -264,20 +244,21 @@ public class LapFragment extends Fragment {
         public void run() {
             repInfo.setText("[1] - " + String.valueOf(currentlap + 1));
             MillisecondTime = StartTime - SystemClock.uptimeMillis();
-            UpdateTime = TimeBuff + MillisecondTime;
+            UpdateTime =  MillisecondTime;
             updateTimeView(UpdateTime);
-            if(MillisecondTime < 0) {
+            if(UpdateTime < 0) {
                 currentlap++;
+
+                Log.d(TAG, String.valueOf(currentlap) + " <- " + String.valueOf(laps));
                 resetRunnable();
                 StartTime = SystemClock.uptimeMillis() + lapSet.getTotalMills();
-                Log.d(TAG, String.valueOf(currentlap) + " <- " + String.valueOf(laps));
                 if (laps > currentlap) {
 
                     handler.postDelayed(this, 0);
                 } else {
                     handler.removeCallbacks(uprunnable);
                     currentlap = 0;
-                    repInfo.setText("");
+//                    repInfo.setText("");
                     actionBtn.setText(Constants.BTN_START);
                 }
             } else {

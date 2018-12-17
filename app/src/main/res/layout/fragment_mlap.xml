@@ -121,7 +121,7 @@
             android:background="@drawable/ic_add_black_24dp" />
     </LinearLayout>
 
-    <android.support.v7.widget.RecyclerView
+    <ListView
         android:id="@+id/rep_list"
         android:layout_width="match_parent"
         android:layout_height="0dp"
@@ -139,7 +139,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_centerHorizontal="true"
-            android:text="--:--.--"
+            android:text="00:00.000"
             android:textColor="@android:color/white"
             android:textSize="42sp"
             android:textStyle="bold"
@@ -169,32 +169,6 @@
             android:textColor="@android:color/white"
             android:textStyle="bold" />
 
-        <ImageButton
-            android:id="@+id/lap_up_btn"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:layout_above="@+id/time_pause"
-            android:layout_alignParentEnd="true"
-            android:layout_marginEnd="15dp"
-            android:layout_marginBottom="6dp"
-            android:background="@drawable/menu_up"
-            android:elevation="8dp"
-            android:scaleType="fitXY"
-            android:scaleX="1.5"
-            android:scaleY="1.5" />
-
-        <ImageButton
-            android:id="@+id/lap_down_btn"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:layout_alignTop="@+id/time_pause"
-            android:layout_alignParentEnd="true"
-            android:layout_marginEnd="15dp"
-            android:background="@drawable/menu_down"
-            android:elevation="8dp"
-            android:scaleType="fitXY"
-            android:scaleX="1.5"
-            android:scaleY="1.5" />
     </RelativeLayout>
 
 
