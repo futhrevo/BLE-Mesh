@@ -82,7 +82,7 @@
             android:layout_weight="1"
             android:inputType="number"
             android:maxLines="1"
-            android:maxLength="3"
+            android:maxLength="2"
             android:textColor="@android:color/white"
             android:hint="ms"
             tools:text="10" />

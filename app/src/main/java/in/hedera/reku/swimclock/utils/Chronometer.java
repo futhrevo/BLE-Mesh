@@ -105,7 +105,6 @@ public class Chronometer extends AppCompatTextView {
         timeElapsed = now - mBase;
 
         DecimalFormat df = new DecimalFormat("00");
-        DecimalFormat dms = new DecimalFormat("000");
 
         int hours = (int)(timeElapsed / (3600 * 1000));
         int remaining = (int)(timeElapsed % (3600 * 1000));
@@ -116,7 +115,7 @@ public class Chronometer extends AppCompatTextView {
         int seconds = (int)(remaining / 1000);
         remaining = (int)(remaining % (1000));
 
-        int milliseconds = (int)(((int)timeElapsed % 1000));
+        int milliseconds = (int)(((int)timeElapsed % 100));
 
         String text = "";
 
@@ -126,7 +125,7 @@ public class Chronometer extends AppCompatTextView {
 
         text += df.format(minutes) + ":";
         text += df.format(seconds) + ":";
-        text += dms.format(milliseconds);
+        text += df.format(milliseconds);
         setText(text);
     }
 

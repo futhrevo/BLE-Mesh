@@ -523,6 +523,7 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
     public void factoryReset(DeviceInfo deviceInfo) {
         if(deviceInfo != null && netInfo != null) {
             btmesh.factoryResetDevice(deviceInfo, netInfo);
+            sendOpcode("000C" + String.valueOf(deviceInfo.meshAddress()));
             showDialog("Factory Reset", 10000);
             return;
         }

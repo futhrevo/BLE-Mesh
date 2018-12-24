@@ -68,6 +68,6 @@ public class LapSet implements Serializable {
     }
 
     public long getTotalMills() {
-        return milliseconds + (1000 * second) + (1000 * 60 * minute);
+        return (milliseconds * 10) + (1000 * second) + (1000 * 60 * minute);
     }
 }

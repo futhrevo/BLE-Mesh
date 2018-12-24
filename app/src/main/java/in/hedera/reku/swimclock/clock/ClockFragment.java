@@ -74,9 +74,9 @@ public class ClockFragment extends Fragment {
 
     public void togglePower(boolean isChecked) {
         if(isChecked) {
-            callback.sendOpcode("01");
+            callback.sendOpcode("0801");
         }else {
-            callback.sendOpcode("08");
+            callback.sendOpcode("0800");
         }
 
     }

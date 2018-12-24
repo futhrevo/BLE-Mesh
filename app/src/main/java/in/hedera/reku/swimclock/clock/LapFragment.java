@@ -191,7 +191,7 @@ public class LapFragment extends Fragment {
         StartTime = 0L ;
         TimeBuff = 0L ;
         UpdateTime = 0L ;
-        timeview.setText("00:00.000");
+        timeview.setText("00:00.00");
     }
 
     public void updateTimeView(long millis) {
@@ -201,11 +201,11 @@ public class LapFragment extends Fragment {
 
         Seconds = Seconds % 60;
 
-        int MilliSeconds = (int) (millis % 1000);
+        int MilliSeconds = (int) (millis % 100);
 
         timeview.setText("" + String.format("%02d", Minutes) + ":"
                 + String.format("%02d", Seconds) + ":"
-                + String.format("%03d", MilliSeconds));
+                + String.format("%02d", MilliSeconds));
     }
 
     public Runnable uprunnable = new Runnable() {

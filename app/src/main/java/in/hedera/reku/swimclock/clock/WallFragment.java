@@ -9,6 +9,7 @@ import android.support.v4.app.Fragment;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.TextView;
 
 import java.text.SimpleDateFormat;
@@ -53,6 +54,27 @@ public class WallFragment extends Fragment {
         // Inflate the layout for this fragment
         View rootView = inflater.inflate(R.layout.fragment_wall, container, false);
         timeview = rootView.findViewById(R.id.timeview);
+        Button sync3btn = rootView.findViewById(R.id.sync3_btn);
+        sync3btn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                callback.sendOpcode("0003");
+            }
+        });
+        Button sync4btn = rootView.findViewById(R.id.sync4_btn);
+        sync4btn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                callback.sendOpcode("0004");
+            }
+        });
+        Button rtcBtn = rootView.findViewById(R.id.real_time_btn);
+        rtcBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                callback.sendOpcode("07");
+            }
+        });
         mTime = Calendar.getInstance();
         mHandler.sendMessageDelayed(Message.obtain(mHandler,
                 TICK_WHAT), 100);
