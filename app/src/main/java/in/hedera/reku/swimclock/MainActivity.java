@@ -121,6 +121,7 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
     private int elementId = 0;
     private boolean status = false;
     private boolean isScanning = false;
+    private boolean proxyPending = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -196,6 +197,7 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
         public void didReceiveDCD(byte[] dcd, int status) {
             super.didReceiveDCD(dcd, status);
             Log.d(TAG, "BTMESH asking didReceiveDCD" + String.valueOf(status));
+            proxyPending = false;
             if (status != 0) {
                 showDialog("Failed to fetch DCD", 2000);
                 Log.e(TAG, "Fetching DCD failed");
@@ -685,8 +687,10 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
                         return;
                     }
                 }
+                if(!proxyPending) {
+                    proxyDevice = null;
+                }
 
-                proxyDevice = null;
 //                unProvDevice = null;
 
 
@@ -913,6 +917,7 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
                 NPDViewModel npdViewModel = ViewModelProviders.of(MainActivity.this).get(NPDViewModel.class);
                 npdViewModel.deleteByMac(unProvDevice.getmac());
                 proxyDevice = new ProxyDevice(unProvDevice.getmac());
+                proxyPending = true;
                 unProvDevice = null;
                 gotoHomeScreen();
                 showDialog("Connecting as Proxy...", 5000);
