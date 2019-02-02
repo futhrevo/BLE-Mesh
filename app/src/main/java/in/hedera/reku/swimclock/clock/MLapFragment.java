@@ -137,16 +137,19 @@ public class MLapFragment extends Fragment {
         return rootView;
     }
 
-    private void startLaps() {
-        if(adapter.getCount() == 0) {
-            Toast.makeText(getActivity(), " No Lap Info Entered", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        alllaps = new ArrayList<LapSet>(adapter.getCount());
-        alllaps.addAll(adapter.getLaps());
+    private void uploadData() {
         for (LapSet newLap : alllaps) {
             callback.sendOpcode("01" + ld + newLap.getLapcount() + newLap.getMillisHex());
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            Log.i(TAG, "Sending new data ...");
         }
+    }
+
+    private void begin() {
         set = 0;
         lapSet = alllaps.get(set);
         laps = lapSet.getlapcountInt();
@@ -160,6 +163,21 @@ public class MLapFragment extends Fragment {
             StartTime = SystemClock.uptimeMillis();
             handler.postDelayed(uprunnable, 0);
         }
+    }
+    private void startLaps() {
+        if(adapter.getCount() == 0) {
+            Toast.makeText(getActivity(), " No Lap Info Entered", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        alllaps = new ArrayList<LapSet>(adapter.getCount());
+        alllaps.addAll(adapter.getLaps());
+        uploadData();
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                begin();
+            }
+        }, 100);
         actionBtn.setText(Constants.BTN_PAUSE);
     }
 

@@ -134,12 +134,15 @@ public class LapFragment extends Fragment {
         return rootView;
     }
 
-    private void startLaps() {
+    private void uploadData() {
         lapSet.setLapcount(Integer.parseInt("0" + etRepCount.getText().toString()));
         lapSet.setMinute(Integer.parseInt("0" + etIntMin.getText().toString()));
         lapSet.setSecond(Integer.parseInt("0" + etIntSec.getText().toString()));
         lapSet.setMilliseconds(Integer.parseInt("0" + etIntms.getText().toString()));
         callback.sendOpcode("04" + ld + lapSet.getLapcount() + lapSet.getMillisHex());
+    }
+
+    private void begin() {
         laps = lapSet.getlapcountInt();
         currentlap = 0;
         isCountdownTimer = ld.equals("00");
@@ -151,6 +154,10 @@ public class LapFragment extends Fragment {
             StartTime = SystemClock.uptimeMillis();
             handler.postDelayed(uprunnable, 0);
         }
+    }
+    private void startLaps() {
+        uploadData();
+        begin();
         actionBtn.setText(Constants.BTN_PAUSE);
     }
 

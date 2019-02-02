@@ -676,6 +676,7 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
                 if (btmesh != null && btmesh.isConnected()) {
                     btmesh.disconnectGatt(handle);
                 }
+                bleService.close();
                 if (isGattPending) {
                     // if provisioning is pending
                     if (provisionMachine.getCurrentState() == PROVISION_CONNECT && unProvDevice != null) {
