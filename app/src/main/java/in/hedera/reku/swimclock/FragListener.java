@@ -32,4 +32,7 @@ public interface FragListener {
     void onOffSet(DeviceInfo deviceInfo, GroupInfo groupInfo);
 
     void factoryReset(DeviceInfo deviceInfo);
+
+    void sendOpcode(String opcode);
+
 }

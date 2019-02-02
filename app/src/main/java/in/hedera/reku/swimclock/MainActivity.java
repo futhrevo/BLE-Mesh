@@ -54,6 +54,7 @@ import java.util.UUID;
 
 import de.halfbit.tinymachine.StateHandler;
 import de.halfbit.tinymachine.TinyMachine;
+import in.hedera.reku.swimclock.clock.ClockFragment;
 import in.hedera.reku.swimclock.home.HomeFragment;
 import in.hedera.reku.swimclock.scanner.BleScanner;
 import in.hedera.reku.swimclock.scanner.NPDViewModel;
@@ -120,6 +121,7 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
     private int elementId = 0;
     private boolean status = false;
     private boolean isScanning = false;
+    private boolean proxyPending = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -195,6 +197,7 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
         public void didReceiveDCD(byte[] dcd, int status) {
             super.didReceiveDCD(dcd, status);
             Log.d(TAG, "BTMESH asking didReceiveDCD" + String.valueOf(status));
+            proxyPending = false;
             if (status != 0) {
                 showDialog("Failed to fetch DCD", 2000);
                 Log.e(TAG, "Fetching DCD failed");
@@ -512,13 +515,7 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
                         String task = String.valueOf(taskEditText.getText());
-                        Log.d(TAG, "opcode: " + task);
-                        long tz = TimeZone.getDefault().getOffset(System.currentTimeMillis());
-                        String time = Long.toHexString(System.currentTimeMillis() + tz);
-                        Log.d(TAG, "local time : " + time);
-                        byte[] bytes = Converters.hexToByteArray(time + task);
-                        Log.d(TAG, "bytes : " + Converters.getHexValue(bytes));
-                        bleService.writeClockInChar(bytes);
+                        sendOpcode(task);
                     }
                 }).setNegativeButton("Cancel", null).create();
         dialog.show();
@@ -528,8 +525,24 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
     public void factoryReset(DeviceInfo deviceInfo) {
         if(deviceInfo != null && netInfo != null) {
             btmesh.factoryResetDevice(deviceInfo, netInfo);
+            sendOpcode("000C" + String.valueOf(deviceInfo.meshAddress()));
             showDialog("Factory Reset", 10000);
             return;
+        }
+    }
+
+    @Override
+    public void sendOpcode(String opcode) {
+        if(bleService != null && bleService.isConnected() && bleService.gattHandle == Constants.HANDLE_PROXY) {
+            Log.d(TAG, "opcode: " + opcode);
+            long tz = TimeZone.getDefault().getOffset(System.currentTimeMillis());
+            String time = Long.toHexString(System.currentTimeMillis() + tz);
+            Log.d(TAG, "local time : " + time);
+            byte[] bytes = Converters.hexToByteArray(time + opcode);
+            Log.d(TAG, "bytes : " + Converters.getHexValue(bytes));
+            bleService.writeClockInChar(bytes);
+        } else {
+            Log.i(TAG, "unable to send opcode: " + opcode);
         }
     }
 
@@ -663,6 +676,7 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
                 if (btmesh != null && btmesh.isConnected()) {
                     btmesh.disconnectGatt(handle);
                 }
+                bleService.close();
                 if (isGattPending) {
                     // if provisioning is pending
                     if (provisionMachine.getCurrentState() == PROVISION_CONNECT && unProvDevice != null) {
@@ -674,8 +688,10 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
                         return;
                     }
                 }
+                if(!proxyPending) {
+                    proxyDevice = null;
+                }
 
-                proxyDevice = null;
 //                unProvDevice = null;
 
 
@@ -770,6 +786,12 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
                 case R.id.navigation_settings:
                     fragment = new SettingsFragment();
                     tag = Constants.SETTINGS_TAG;
+                    break;
+
+                case R.id.navigation_clock:
+                    fragment = new ClockFragment();
+                    tag = Constants.CLOCK_TAG;
+                    sendOpcode("07");
                     break;
             }
             return loadFragment(fragment, tag);
@@ -896,6 +918,7 @@ public class MainActivity extends AppCompatActivity implements FragListener, Han
                 NPDViewModel npdViewModel = ViewModelProviders.of(MainActivity.this).get(NPDViewModel.class);
                 npdViewModel.deleteByMac(unProvDevice.getmac());
                 proxyDevice = new ProxyDevice(unProvDevice.getmac());
+                proxyPending = true;
                 unProvDevice = null;
                 gotoHomeScreen();
                 showDialog("Connecting as Proxy...", 5000);
